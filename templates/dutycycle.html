@@ -5,7 +5,10 @@
     <body>
         <form action="{{ url_for('index') }}" method="post">
 	    {{ form.hidden_tag() }}
+            Flow Rate: flow_rate
+            <br />
 	    {{ form.flow_rate.label }} {{ form.flow_rate(size=3) }}
+            <br />
 	    Duty Cycle: {{ duty_cycle }}
 	    <input type="submit" value="Submit">
         </form>

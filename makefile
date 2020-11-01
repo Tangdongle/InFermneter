@@ -6,9 +6,8 @@ build:
 	ssh-keygen -t rsa -f /home/pi/.ssh/id_rsa -q -P ""
 	git clone git@github.com:Tangdongle/infbeer_pwm.git
 	cd infbeer_pwm
+	pip3 install -r requirements.txt
 	touch $(DB)
-	$(PYTHON) -m venv .env
-	source .env/bin/activate
 	python3 db.py
 
 

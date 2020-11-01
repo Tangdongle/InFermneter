@@ -22,8 +22,9 @@ class FlowRate(BaseModel):
 
     @classmethod
     def set_flow_rate(self, flow_rate: int):
-        dc.set_cycle(flow_rate)
+        dc.set_flowrate(flow_rate)
         FlowRate.create(flow_rate=flow_rate)
+        DutyCycle.set_cycle(dc.duty_cycle)
 
 class DutyCycle(BaseModel):
     cycle = IntegerField(default=0)
