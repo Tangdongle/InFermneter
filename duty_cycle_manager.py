@@ -5,8 +5,14 @@ IO.setwarnings(False)
 
 power = 0
 
-FLOW_MAX = 75.0
-FLOW_LOW = 15.0
+def calc_flow_rate(cycle: float):
+    return (4.76e-5 * pow(cycle, 2)) + (3.85e-2 * cycle) + 1.14
+
+def calc_duty_cycle(flowrate: float):
+    return (4.76e-5 * pow(flowrate, 2)) + (3.85e-2 * flowrate) + 1.14
+
+FLOW_MAX = calc_flow_rate(100)
+FLOW_LOW = calc_flow_rate(20)
 ON = True
 OFF = False
 
@@ -28,7 +34,7 @@ class DutyCycleManager():
         if flowrate > FLOW_MAX:
             flowrate = FLOW_MAX
 
-        self.duty_cycle =(0.000562 * pow(flowrate, 3) - (0.053428 * pow(flowrate, 2)) + (2.039215 * flowrate) - 2.385384
+        self.duty_cycle = calc_flow_rate(flowrate)
         self.pwm_object.ChangeDutyCycle(self.duty_cycle)
 
     def cleanup(self):

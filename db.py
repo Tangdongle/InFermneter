@@ -1,7 +1,10 @@
-from peewee import Model, SqliteDatabase, FloatField, IntegerField
+from peewee import Model, SqliteDatabase, FloatField, IntegerField, CharField
 
-from duty_cycle_manager import DutyCycleManager
-dc = DutyCycleManager()
+try:
+    from duty_cycle_manager import DutyCycleManager
+    dc = DutyCycleManager()
+except ModuleNotFoundError:
+    print("Can't find pi")
 
 db = SqliteDatabase('db.db')
 
@@ -9,39 +12,30 @@ class BaseModel(Model):
     class Meta:
         database = db
 
-class FlowRate(BaseModel):
+class Pump(BaseModel):
+    number = IntegerField(unique=True)
+    name = CharField(unique=True)
     flow_rate = FloatField(default=0.0)
-
-    @classmethod
-    def get_flow_rate(self):
-        try:
-            return FlowRate.select().order_by(FlowRate.id.desc()).get().flow_rate
-        except FlowRate.DoesNotExist:
-            FlowRate.create(flow_rate=0)
-            return FlowRate.select().order_by(FlowRate.id.desc()).get().flow_rate
-
-    @classmethod
-    def set_flow_rate(self, flow_rate: int):
-        dc.set_flowrate(flow_rate)
-        FlowRate.create(flow_rate=flow_rate)
-        DutyCycle.set_cycle(dc.duty_cycle)
-
-class DutyCycle(BaseModel):
     cycle = IntegerField(default=0)
 
     @classmethod
-    def get_cycle(self):
+    def get_pump(self, pump_number: int):
         try:
-            return DutyCycle.select().order_by(DutyCycle.id.desc()).get().cycle
-        except DutyCycle.DoesNotExist:
-            DutyCycle.create(cycle=0)
-            return DutyCycle.select().order_by(DutyCycle.id.desc()).get().cycle
-
+            return Pump.select().where(number=pump_number).get()
+        except Pump.DoesNotExist:
+            return Pump.select().where(number=pump_number).get()
 
     @classmethod
-    def set_cycle(self, cycle: int):
-        DutyCycle.create(cycle=cycle)
+    def set_flow_rate(self, pump_number: int, flow_rate: int):
+        Pump.update(flow_rate=flow_rate).where(number=pump_number)
+        Pump.execute()
 
 db.connect()
 if __name__ == '__main__':
-    db.create_tables([DutyCycle, FlowRate])
+    db.create_tables([Pump])
+
+    pump_count = Pump.select().count()
+    names = ["PMW 1", "PMW 2", "PMW 3"]
+    if pump_count == 0:
+        for i in range(3):
+            Pump.create(number=i, name=names[i], flow_rate=0, cycle=0)

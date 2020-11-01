@@ -3,6 +3,7 @@ from wtforms import StringField, IntegerField
 from wtforms.validators import NumberRange, ValidationError
 
 class InterfaceForm(FlaskForm):
+    pump_id = IntegerField('pump_id', validators=[NumberRange()])
     flow_rate = IntegerField('flow_rate', validators=[NumberRange()])
 
     def validate_flow_rate(form, field):

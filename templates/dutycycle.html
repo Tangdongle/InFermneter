@@ -3,15 +3,18 @@
         <title>Duty Cycle Manager</title>
     </head>
     <body>
+        {%for pump_id in pumps%}
         <form action="{{ url_for('index') }}" method="post">
 	    {{ form.hidden_tag() }}
-            Flow Rate: {{ flow_rate }}
+            <h2>Pump: {{ pumps[pump_id].name }} | #{{ pump_id }}</h2>
+            Current Flow Rate: {{ pumps[pump_id].flow_rate }}
             <br />
-	    {{ form.flow_rate.label }} {{ form.flow_rate(size=3) }}
+	    Set Flow Rate: {{ form.flow_rate(size=3) }}
             <br />
-	    Duty Cycle: {{ duty_cycle }}
+	    Duty Cycle: {{ pumps[pump_id].cycle }}
 	    <input type="submit" value="Submit">
         </form>
+        {%endfor%}
     </body>
 </html>
 
