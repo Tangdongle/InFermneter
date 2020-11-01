@@ -5,7 +5,7 @@
     <body>
         <form action="{{ url_for('index') }}" method="post">
 	    {{ form.hidden_tag() }}
-            Flow Rate: flow_rate
+            Flow Rate: {{ flow_rate }}
             <br />
 	    {{ form.flow_rate.label }} {{ form.flow_rate(size=3) }}
             <br />

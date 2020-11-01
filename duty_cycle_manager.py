@@ -17,19 +17,24 @@ class DutyCycleManager():
         IO.setmode(IO.BCM)
 
         IO.setup(12,IO.OUT)
+        self.frequency = 100
         self.pwm_object = IO.PWM(12,self.frequency)
         self.pwm_object.start(0)
         self.duty_cycle = 0
 
     def set_flowrate(self, flowrate):
-        if flowrate < self.low:
-            flowrate = self.low
-        if flowrate > self.high:
-            flowrate = self.high
+        if flowrate < FLOW_LOW:
+            flowrate = FLOW_LOW
+        if flowrate > FLOW_MAX:
+            flowrate = FLOW_MAX
 
         self.duty_cycle = (4.76e-5 * pow(flowrate, 2)) + (3.85e-2 * flowrate) + 1.14
         self.pwm_object.ChangeDutyCycle(self.duty_cycle)
 
+    def cleanup(self):
+        self.pwm_object.ChangeDutyCycle(0)
+        self.pwm_object.stop()
+        IO.cleanup()
 
 
 
