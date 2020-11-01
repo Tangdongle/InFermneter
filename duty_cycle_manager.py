@@ -1,0 +1,86 @@
+import RPi.GPIO as IO
+
+import time
+IO.setwarnings(False)
+
+power = 0
+
+FLOW_MAX = 1090.0
+FLOW_LOW = 450.0
+ON = True
+OFf = False
+
+class DutyCycleManager():
+    current_output = 0
+    high: float = FLOW_MAX
+    low: float = FLOW_LOW
+    cycle_time: int = 30
+    flowrate: float = 0.0
+    pwm_object = None
+    frequency: int = 100
+
+    def __init__(self, high=FLOW_MAX, low=FLOW_LOW):
+        high = high
+        low = low
+        IO.setmode(IO.BCM)
+
+        IO.setup(12,IO.OUT)
+        self.pwm_object = IO.PWM(12,self.frequency)
+        self.pwm_object.start(0)
+
+
+    def get_cycle(self):
+        return self.current_output
+
+    def set_cycle(self, value):
+        if value < self.low:
+            value = self.low
+        elif value > self.high:
+            value = self.high
+            self.current_output = value
+
+    def calc_power(self, flowrate):
+        if flowrate < self.low:
+            flowrate = self.low
+            if flowrate > self.high:
+                flowrate = self.high
+
+        self.duty_cycle = (4.76e-5 * pow(flowrate, 2)) + (3.85e-2 * flowrate) + 1.14
+        return self.duty_cycle
+
+    def calc_cycle_power(self, flowrate):
+        self.status = ON
+        print(f"Starting cycle for flowrate: {flowrate}")
+
+        def on_cycle(self):
+            return self.flowrate / self.low * self.cycle_time
+
+        def off_cycle(self):
+            return (1 - self.flowrate / self.low) * self.cycle_time
+        print(f"Cycle is {self.status}")
+        to_stop = on_cycle() if self.status else off_cycle()
+        print(f"Waiting for  {to_stop}")
+        self.pwm_object.ChangeDutyCycle(self.calc_power(FLOW_LOW) if self.status else 0)
+        print(f"Setting duty cycle to {self.calc_power(FLOW_LOW)}")
+        time.sleep(to_stop)
+        self.status = not self.status
+
+    def loop(self):
+        try:
+            dc = 0
+            while True:
+                val = float(input("Flow Rate: "))
+                if val <= FLOW_LOW:
+                    self.calc_cycle_power(self.pwm_object, val)
+
+            dc = self.calc_power(val)
+            print(dc)
+            self.pwm_object.ChangeDutyCycle(dc)
+            time.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
+
+    def cleanup(self):
+        self.pwm_object.ChangeDutyCycle(0)
+        self.pwm_object.stop()
+        IO.cleanup()
