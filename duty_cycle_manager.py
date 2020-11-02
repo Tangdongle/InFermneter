@@ -28,7 +28,7 @@ class DutyCycleManager():
         if flowrate > FLOW_MAX:
             flowrate = FLOW_MAX
 
-        self.duty_cycle =(0.000562 * pow(flowrate, 3) - (0.053428 * pow(flowrate, 2)) + (2.039215 * flowrate) - 2.385384
+        self.duty_cycle = 0.000562 * pow(flowrate, 3) - (0.053428 * pow(flowrate, 2)) + (2.039215 * flowrate) - 2.385384
         self.pwm_object.ChangeDutyCycle(self.duty_cycle)
 
     def cleanup(self):
