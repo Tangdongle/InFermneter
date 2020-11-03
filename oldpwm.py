@@ -12,9 +12,9 @@ from math import exp
 import time 
 IO.setwarnings(False)
 
-FLOW_MAX = 1090.0
-FLOW_LOW = 450.0
-CYCLE_TIME = 30
+FLOW_MAX = 78.0
+FLOW_LOW = 20.0
+CYCLE_TIME = 100
 
 power = 0
 
@@ -23,7 +23,7 @@ def calc_power(flowrate):
     flowrate = FLOW_LOW
   if flowrate > FLOW_MAX:
     flowrate = FLOW_MAX
-  return (4.76e-5 * pow(flowrate, 2)) + (3.85e-2 * flowrate) + 1.14
+  return (0.000562 * pow(flowrate, 3)) - (0.053428 * pow(flowrate, 2)) + (2.039215 * flowrate) - 2.385384
   #return 0.0911 * flowrate - 6.21
 
 def calc_cycle_power(pwm, flowrate):
@@ -39,7 +39,7 @@ def calc_cycle_power(pwm, flowrate):
   while True:
     print(f"Cycle is {on}")
     to_stop = on_cycle() if on else off_cycle()
-    print(f"Waitinf for  {to_stop}")
+    print(f"Waiting for  {to_stop}")
     pwm.ChangeDutyCycle(calc_power(FLOW_LOW) if on else 0)
     print(f"Setting duty cycle to {calc_power(FLOW_LOW)}")
     time.sleep(to_stop)
