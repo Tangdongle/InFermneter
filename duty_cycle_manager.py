@@ -5,7 +5,7 @@ IO.setwarnings(False)
 
 power = 0
 
-FLOW_MAX = 75.0
+FLOW_MAX = 78.0
 FLOW_LOW = 15.0
 ON = True
 OFF = False
@@ -17,7 +17,7 @@ class DutyCycleManager():
         IO.setmode(IO.BCM)
 
         IO.setup(12,IO.OUT)
-        self.frequency = 100
+        self.frequency = 1000
         self.pwm_object = IO.PWM(12,self.frequency)
         self.pwm_object.start(0)
         self.duty_cycle = 0
