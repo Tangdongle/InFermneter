@@ -24,10 +24,10 @@ async def cycle_pump(idx, pwm, flowrate, on):
     while True:
 
         def on_cycle():
-            return flowrate / FLOW_LOW * CYCLE_TIME
+            return flowrate / FLOW_LOW * CYCLE_TIME * 1000
 
         def off_cycle():
-            return (1 - flowrate / FLOW_LOW) * CYCLE_TIME
+            return (1 - flowrate / FLOW_LOW) * CYCLE_TIME * 1000
 
         print(f"Cycle is {on} for pump {idx}")
         to_stop = on_cycle() if on else off_cycle()
