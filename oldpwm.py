@@ -47,16 +47,13 @@ def calc_power(flowrate):
 
 
 def calc_cycle_power(pwms, flowrate):
-    def stop():
-        task.cancel()
-
     on = True
 
-    for idx, pwm in enumerate(pwms):
-        loop = asyncio.get_event_loop()
-        task = loop.create_task(cycle_pump(idx, pwm, flowrate, on))
-    pending = asyncio.all_tasks()
-    loop.run_until_complete(asyncio.gather(*pending))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(asyncio.gather(
+        cycle_pump(idx, pwm, flowrate, on)
+        for idx, pwm in enumerate(pwms)
+    ))
 
 
 # GPIO Pins
