@@ -24,17 +24,17 @@ async def cycle_pump(idx, pwm, flowrate, on):
     while True:
 
         def on_cycle():
-            return flowrate / FLOW_LOW * CYCLE_TIME * 1000
+            return flowrate / FLOW_LOW * CYCLE_TIME
 
         def off_cycle():
-            return (1 - flowrate / FLOW_LOW) * CYCLE_TIME * 1000
+            return (1 - flowrate / FLOW_LOW) * CYCLE_TIME
 
         print(f"Cycle is {on} for pump {idx}")
         to_stop = on_cycle() if on else off_cycle()
         print(f"Waiting for  {to_stop}")
         pwm.ChangeDutyCycle(calc_power(FLOW_LOW) if on else 0)
         print(f"Setting duty cycle to {calc_power(FLOW_LOW)}")
-        asyncio.sleep(to_stop)
+        await asyncio.sleep(to_stop)
         on = not on
 
 
