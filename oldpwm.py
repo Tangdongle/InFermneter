@@ -12,8 +12,14 @@ CYCLE_TIME = 100
 
 power = 0
 
+PUMP_IDS = {
+    0: 12,
+    1: 13
+}
+
 
 async def cycle_pump(idx, pwm, flowrate, on):
+    idx = PUMP_IDS[idx]
     print(f"Starting cycle for flowrate: {flowrate} for pump {idx}")
     while True:
 
