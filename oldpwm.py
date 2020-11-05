@@ -23,14 +23,18 @@ FLOW_MAX = 78.0
 FLOW_LOW = 20.0
 CYCLE_TIME = 100
 
+
 PUMP_IDS = {
     pid: PumpConfig(config[f"PUMP{pid}"]["GPIO"], config[f"PUMP{pid}"]["FLOWRATE"])
     for pid in range(1)
 }
 
+MIN_FLOWRATE = min((p.flowrate for p in PUMP_IDS.values()))
 
-async def cycle_pump(idx: int, pwm: object, flowrate: float, on: bool):
-    idx = PUMP_IDS[idx]
+
+async def cycle_pump(idx: int, pwm: object, on: bool):
+    pconfig = PUMP_IDS[idx]
+    flowrate = pconfig.flowrate
     print(f"Starting cycle for flowrate: {flowrate} for pump {idx}")
     while True:
 
@@ -63,12 +67,12 @@ def calc_power(flowrate: float):
     # return 0.0911 * flowrate - 6.21
 
 
-def calc_cycle_power(pwms: tuple(object), flowrate: float):
+def calc_cycle_power(pwms: tuple(object)):
     on = True
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*[
-        cycle_pump(idx, pwm, flowrate, on)
+        cycle_pump(idx, pwm, on)
         for idx, pwm in enumerate(pwms)
     ]))
 
@@ -77,23 +81,25 @@ frequency = 100
 
 IO.setmode(IO.BCM)
 
-IO.setup(12, IO.OUT)
-p = IO.PWM(12, frequency)
-p.start(0)
+def setuppump(config):
+    pin = config.gpio
+    IO.setup(pin, IO.OUT)
+    p = IO.PWM(pin, frequency)
+    p.start(0)
+    return p
 
+pumps = (
+    setuppump(config)
+    for config in PUMP_IDS.values()
+)
 
-IO.setup(13, IO.OUT)
-p2 = IO.PWM(13, frequency)
-p2.start(0)
-
-pumps = (p, p2)
 try:
     dc = 0
 
     while True:
         val = float(input("Flow Rate: "))
         if val <= FLOW_LOW:
-            calc_cycle_power(pumps, val)
+            calc_cycle_power(pumps)
 
         dc = calc_power(val)
         # Change the duty cycle on all pumps
