@@ -1,24 +1,35 @@
-import RPi.GPIO as IO
-
 import asyncio
-
 import time
+import configparser
+from collections import namedtuple
+try:
+    import RPi.GPIO as IO
+except ImportError:
+    print("No GPIO lib detected. Is this running on the PI and has this library been installed?")
+    quit(1)
+
+PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate"])
+
 
 IO.setwarnings(False)
+
+CONFIGFILE = "config.ini"
+
+config = configparser.ConfigParser()
+config.read(CONFIGFILE)
+
 
 FLOW_MAX = 78.0
 FLOW_LOW = 20.0
 CYCLE_TIME = 100
 
-power = 0
-
 PUMP_IDS = {
-    0: 12,
-    1: 13
+    pid: PumpConfig(config[f"PUMP{pid}"]["GPIO"], config[f"PUMP{pid}"]["FLOWRATE"])
+    for pid in range(1)
 }
 
 
-async def cycle_pump(idx, pwm, flowrate, on):
+async def cycle_pump(idx: int, pwm: object, flowrate: float, on: bool):
     idx = PUMP_IDS[idx]
     print(f"Starting cycle for flowrate: {flowrate} for pump {idx}")
     while True:
@@ -38,7 +49,7 @@ async def cycle_pump(idx, pwm, flowrate, on):
         on = not on
 
 
-def calc_power(flowrate):
+def calc_power(flowrate: float):
     if flowrate < FLOW_LOW:
         flowrate = FLOW_LOW
     if flowrate > FLOW_MAX:
@@ -52,7 +63,7 @@ def calc_power(flowrate):
     # return 0.0911 * flowrate - 6.21
 
 
-def calc_cycle_power(pwms, flowrate):
+def calc_cycle_power(pwms: tuple(object), flowrate: float):
     on = True
 
     loop = asyncio.get_event_loop()
@@ -62,111 +73,37 @@ def calc_cycle_power(pwms, flowrate):
     ]))
 
 
-# GPIO Pins
-clk = 17
-dt = 18
-
-dt_val = 0
-clk_val = 0
-fq = 100
-
-last_gpio = None
-
-INCREMENT = 5
+frequency = 100
 
 IO.setmode(IO.BCM)
-# IO.setup(clk,IO.IN, pull_up_down=IO.PUD_DOWN)
-# IO.setup(dt,IO.IN, pull_up_down=IO.PUD_DOWN)
 
 IO.setup(12, IO.OUT)
-p = IO.PWM(12, fq)
+p = IO.PWM(12, frequency)
 p.start(0)
 
 
 IO.setup(13, IO.OUT)
-p2 = IO.PWM(13, fq)
+p2 = IO.PWM(13, frequency)
 p2.start(0)
 
-# clkLastState = IO.input(clk)
-counter = 0
-
-
-def callback(channel):
-    global last_gpio
-    global clk_val
-    global dt_val
-
-    level = IO.input(channel)
-    # if channel == clk:
-    #  clk_val = level
-    # elif channel == dt:
-    #  dt_val = level
-
-    if level != 1:
-        return
-
-    # if (channel != last_gpio):  # (debounce)
-    #  last_gpio = channel
-    #  if channel == dt and clk_val == 1:
-    #    change_callback(1)
-    #  elif channel == clk and dt_val == 1:
-    #    change_callback(-1)
-
-
-# IO.add_event_detect(dt, IO.BOTH, callback)
-# IO.add_event_detect(clk, IO.BOTH, callback)
-
+pumps = (p, p2)
 try:
-
-    # queue = Queue()
-    # event = threading.Event()
-
-    ## Runs in the main thread to handle the work assigned to us by the
-    ## callbacks.
-    # def consume_queue():
-    #  global power
-    #  # If we fall behind and have to process many queue entries at once,
-    #  # we can catch up by only calling `amixer` once at the end.
-    #  while not queue.empty():
-    #    delta = queue.get()
-    #    if delta == 1:
-    #      power += INCREMENT
-    #    elif delta == -1:
-    #      power -= INCREMENT
-    #    if power > 100:
-    #      power = 100
-    #    elif power < 0:
-    #      power = 0
-    #    print(power)
-
     dc = 0
-    ## on_turn and on_press run in the background thread. We want them to do
-    ## as little work as possible, so all they do is enqueue the volume delta.
-    # def change_callback(delta):
-    #  queue.put(delta)
-    #  event.set()
 
     while True:
         val = float(input("Flow Rate: "))
         if val <= FLOW_LOW:
-            calc_cycle_power((p, p2), val)
+            calc_cycle_power(pumps, val)
 
         dc = calc_power(val)
-        print(dc)
-        p.ChangeDutyCycle(dc)
-        p2.ChangeDutyCycle(dc)
-        # event.wait(1200)
-        # consume_queue()
-        # event.clear()
+        # Change the duty cycle on all pumps
+        [pump.ChangeDutyCycle(dc) for pump in pumps]
         time.sleep(0.1)
 except KeyboardInterrupt:
     pass
 
 
-# IO.remove_event_detect(dt)
-# IO.remove_event_detect(clk)
-p.ChangeDutyCycle(0)
-p.stop()
-p2.ChangeDutyCycle(0)
-p2.stop()
+for pump in pumps:
+    pump.ChangeDutyCycle(0)
+    pump.stop()
 IO.cleanup()
