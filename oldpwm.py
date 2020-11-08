@@ -17,6 +17,18 @@ PUMP_IDS = {
     1: 13
 }
 
+MIXER = 23
+
+IO.setup(MIXER, IO.OUT)
+
+async def cycle_mixer_pump():
+    on = True
+    while True:
+        IO.output(MIXER, IO.HIGH if on else IO.LOW)
+        to_stop = 10 if on else 20
+        await asyncio.sleep(to_stop)
+
+
 
 async def cycle_pump(idx, pwm, flowrate, on):
     idx = PUMP_IDS[idx]
@@ -59,7 +71,7 @@ def calc_cycle_power(pwms, flowrate):
     loop.run_until_complete(asyncio.gather(*[
         cycle_pump(idx, pwm, flowrate, on)
         for idx, pwm in enumerate(pwms)
-    ]))
+    ] + [cycle_mixer_pump()]))
 
 
 # GPIO Pins
