@@ -1,6 +1,7 @@
 import RPi.GPIO as IO
 
 import asyncio
+from datetime import datetime
 
 import time
 
@@ -21,17 +22,17 @@ MIXER = 23
 
 async def cycle_mixer_pump():
     on = True
-    counter = 0
+    icounter = 0
     while True:
         print(f"On is {on}")
         IO.output(MIXER, IO.HIGH if on else IO.LOW)
         to_stop = 1 if on else 29
         on = not on
-        print(f"awaiting sleep of {to_stop}")
+        print(f"awaiting sleep of {to_stop} at {datetime.now()}")
         await asyncio.sleep(to_stop)
         print(f"Slept")
-        counter += 1
-        if counter >= 10:
+        icounter += 1
+        if icounter >= 10:
             break
 
     while True:
@@ -115,6 +116,7 @@ p2.start(0)
 counter = 0
 
 IO.setup(MIXER, IO.OUT)
+IO.output(MIXER, IO.LOW)
 
 
 def callback(channel):
