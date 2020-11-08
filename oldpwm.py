@@ -31,8 +31,6 @@ PUMP_IDS = {
 
 MIXER = 23
 
-IO.setup(MIXER, IO.OUT)
-
 async def cycle_mixer_pump():
     on = True
     while True:
