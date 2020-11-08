@@ -22,7 +22,6 @@ config = configparser.ConfigParser()
 config.read(CONFIGFILE)
 
 
-FLOW_MAX = 78.0
 FLOW_LOW = 20.0
 
 PUMP_IDS = {
@@ -68,16 +67,12 @@ async def cycle_pump(idx: int, pwm, on: bool):
             return (1 - flowrate / FLOW_LOW) * cycle_time
 
         to_stop = on_cycle() if on else off_cycle()
-        pwm.ChangeDutyCycle(calc_power(FLOW_LOW) if on else 0)
+        pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
         await asyncio.sleep(to_stop)
         on = not on
 
 
 def calc_power(flowrate: float):
-    if flowrate < FLOW_LOW:
-        flowrate = FLOW_LOW
-    if flowrate > FLOW_MAX:
-        flowrate = FLOW_MAX
     return (
         (0.000562 * pow(flowrate, 3))
         - (0.053428 * pow(flowrate, 2))
