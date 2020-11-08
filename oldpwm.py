@@ -10,7 +10,7 @@ except ImportError:
     print("No GPIO lib detected. Is this running on the PI and has this library been installed?")
     quit(1)
 
-PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate", "cycle_time", "pwm"])
+PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate", "cycle_time"])
 MixerPumpConfig = namedtuple("MixerPumpConfig", ["degas_on", "degas_cycle_time", "on", "cycle_time", "degas_limit"])
 
 
@@ -55,11 +55,10 @@ async def cycle_mixer_pump(mpump):
         on = not on
         await asyncio.sleep(to_stop)
 
-async def cycle_pump(idx: int, pump: PumpConfig, on: bool):
-    pwm = pump.pwm
+async def cycle_pump(idx: int, pwm, on: bool):
     pconfig = PUMP_IDS[idx + 1]
     flowrate = pconfig.flowrate
-    cycle_time = pump.cycle_time
+    cycle_time = pconfig.cycle_time
     while True:
 
         def on_cycle():
@@ -101,26 +100,26 @@ def calc_cycle_power(pwms):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*[
         cycle_pump(idx, pwm, on)
-        for idx, pwm in enumerate(pwms)
+        for idx, pwm in pwms.items()
     ] + [cycle_mixer_pump(mixer)]))
 
 
 frequency = 100
 
 IO.setmode(IO.BCM)
+IO.setup(MIXER, IO.OUT)
 
 def setuppump(config: PumpConfig):
     pin = config.gpio
     IO.setup(int(pin), IO.OUT)
     p = IO.PWM(int(pin), frequency)
     p.start(0)
-    config.pwm = p
-    return config
+    return p
 
-pumps = [
-    setuppump(config)
-    for config in PUMP_IDS.values()
-]
+pumps = {
+    idx: setuppump(config)
+    for idx, config in enumerate(PUMP_IDS.values())
+}
 try:
     dc = 0
 
