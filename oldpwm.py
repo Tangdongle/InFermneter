@@ -19,8 +19,6 @@ PUMP_IDS = {
 
 MIXER = 23
 
-IO.setup(MIXER, IO.OUT)
-
 async def cycle_mixer_pump():
     on = True
     while True:
@@ -101,6 +99,8 @@ p2.start(0)
 
 # clkLastState = IO.input(clk)
 counter = 0
+
+IO.setup(MIXER, IO.OUT)
 
 
 def callback(channel):
