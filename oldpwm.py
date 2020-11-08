@@ -10,7 +10,8 @@ except ImportError:
     print("No GPIO lib detected. Is this running on the PI and has this library been installed?")
     quit(1)
 
-PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate"])
+PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate", "cycle_time", "pwm"])
+MixerPumpConfig = namedtuple("MixerPumpConfig", ["degas_on", "degas_cycle_time", "on", "cycle_time", "degas_limit"])
 
 
 IO.setwarnings(False)
@@ -23,54 +24,52 @@ config.read(CONFIGFILE)
 
 FLOW_MAX = 78.0
 FLOW_LOW = 20.0
-CYCLE_TIME = 100
-
 
 PUMP_IDS = {
-    pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), int(config[f"PUMP{pid}"]["FLOWRATE"]))
+    pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), int(config[f"PUMP{pid}"]["FLOWRATE"]), int(config[f"PUMP{pid}"]["CYCLE_TIME"]))
     for pid in range(1, 2)
 }
 
 MIXER = 23
 
-async def cycle_mixer_pump():
+def calc_off_period(on, cycle_time):
+    return cycle_time - on
+
+async def cycle_mixer_pump(mpump):
     on = True
     icounter = 0
+    d_on = mpump.degas_on
     while True:
-        print(f"On is {on}")
         IO.output(MIXER, IO.HIGH if on else IO.LOW)
-        to_stop = 1 if on else 29
+        to_stop =  d_on if on else calc_off_period(d_on, mpump.degas_cycle_time)
         on = not on
-        print(f"awaiting sleep of {to_stop} at {datetime.now()}")
         await asyncio.sleep(to_stop)
-        print(f"Slept")
         icounter += 1
-        if icounter >= 30:
+        if icounter >= mpump.degas_limit:
             break
 
+    on_time = mpump.on
     while True:
         IO.output(MIXER, IO.HIGH if on else IO.LOW)
-        to_stop = 10 if on else 20
+        to_stop = on_time if on else calc_off_period(on_time, mpump.cycle_time)
         on = not on
         await asyncio.sleep(to_stop)
 
-async def cycle_pump(idx: int, pwm: object, on: bool):
+async def cycle_pump(idx: int, pump: PumpConfig, on: bool):
+    pwm = pump.pwm
     pconfig = PUMP_IDS[idx + 1]
     flowrate = pconfig.flowrate
-    print(f"Starting cycle for flowrate: {flowrate} for pump {idx}")
+    cycle_time = pump.cycle_time
     while True:
 
         def on_cycle():
-            return flowrate / FLOW_LOW * CYCLE_TIME
+            return flowrate / FLOW_LOW * cycle_time
 
         def off_cycle():
-            return (1 - flowrate / FLOW_LOW) * CYCLE_TIME
+            return (1 - flowrate / FLOW_LOW) * cycle_time
 
-        print(f"Cycle is {on} for pump {idx}")
         to_stop = on_cycle() if on else off_cycle()
-        print(f"Waiting for  {to_stop}")
         pwm.ChangeDutyCycle(calc_power(FLOW_LOW) if on else 0)
-        print(f"Setting duty cycle to {calc_power(FLOW_LOW)}")
         await asyncio.sleep(to_stop)
         on = not on
 
@@ -86,17 +85,24 @@ def calc_power(flowrate: float):
         + (2.039215 * flowrate)
         - 2.385384
     )
-    # return 0.0911 * flowrate - 6.21
 
 
 def calc_cycle_power(pwms):
+    global config
     on = True
+    mixer = MixerPumpConfig(
+        int(config[f"MIXER"]["DEGAS_ON"]),
+        int(config[f"MIXER"]["DEGAS_CYCLE_TIME"]),
+        int(config[f"MIXER"]["ON"]),
+        int(config[f"MIXER"]["CYCLE_TIME"]),
+        int(config[f"MIXER"]["DEGAS_CYCLE_LIMIT"])
+    )
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*[
         cycle_pump(idx, pwm, on)
         for idx, pwm in enumerate(pwms)
-    ] + [cycle_mixer_pump()]))
+    ] + [cycle_mixer_pump(mixer)]))
 
 
 frequency = 100
@@ -108,7 +114,8 @@ def setuppump(config: PumpConfig):
     IO.setup(int(pin), IO.OUT)
     p = IO.PWM(int(pin), frequency)
     p.start(0)
-    return p
+    config.pwm = p
+    return config
 
 pumps = [
     setuppump(config)
