@@ -24,8 +24,11 @@ config.read(CONFIGFILE)
 
 FLOW_LOW = 20.0
 
+def from_ppd(ppd):
+    return (ppd * 570) / (24 * 60)
+
 PUMP_IDS = {
-    pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), int(config[f"PUMP{pid}"]["FLOWRATE"]), int(config[f"PUMP{pid}"]["CYCLE_TIME"]))
+    pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), from_ppd(float(config[f"PUMP{pid}"]["FLOWRATE"])), int(config[f"PUMP{pid}"]["CYCLE_TIME"]))
     for pid in range(1, 2)
 }
 
