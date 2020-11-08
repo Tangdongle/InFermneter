@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime
+
 import time
 import configparser
 from collections import namedtuple
@@ -33,17 +35,17 @@ MIXER = 23
 
 async def cycle_mixer_pump():
     on = True
-    counter = 0
+    icounter = 0
     while True:
         print(f"On is {on}")
         IO.output(MIXER, IO.HIGH if on else IO.LOW)
         to_stop = 1 if on else 29
         on = not on
-        print(f"awaiting sleep of {to_stop}")
+        print(f"awaiting sleep of {to_stop} at {datetime.now()}")
         await asyncio.sleep(to_stop)
         print(f"Slept")
-        counter += 1
-        if counter >= 10:
+        icounter += 1
+        if icounter >= 30:
             break
 
     while True:
@@ -112,7 +114,6 @@ pumps = [
     setuppump(config)
     for config in PUMP_IDS.values()
 ]
-
 try:
     dc = 0
 
