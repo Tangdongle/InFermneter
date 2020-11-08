@@ -20,10 +20,21 @@ PUMP_IDS = {
 MIXER = 23
 
 async def cycle_mixer_pump():
-    on = True
+    on = False
+    counter = 0
+    while True:
+        IO.output(MIXER, IO.HIGH if on else IO.LOW)
+        to_stop = 1 if on else 29
+        on = not on
+        await asyncio.sleep(to_stop)
+        counter += 1
+        if counter >= 5:
+            break
+
     while True:
         IO.output(MIXER, IO.HIGH if on else IO.LOW)
         to_stop = 10 if on else 20
+        on = not on
         await asyncio.sleep(to_stop)
 
 
