@@ -81,7 +81,7 @@ frequency = 100
 
 IO.setmode(IO.BCM)
 
-def setuppump(config):
+def setuppump(config: PumpConfig):
     pin = config.gpio
     IO.setup(pin, IO.OUT)
     p = IO.PWM(pin, frequency)
