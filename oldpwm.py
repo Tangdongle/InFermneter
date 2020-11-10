@@ -76,6 +76,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
             print(f"Power is {on}")
             print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
             to_stop = on_cycle() if on else off_cycle()
+            print(f"Sleeping for {to_stop}")
             pwm.ChangeDutyCycle(power if on else 0)
             await asyncio.sleep(to_stop)
             on = not on
