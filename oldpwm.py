@@ -62,7 +62,6 @@ async def cycle_pump(idx: int, pwm, on: bool):
     flowrate = pconfig.flowrate
     cycle_time = pconfig.cycle_time
     if flowrate <= FLOW_LOW:
-        flowrate = FLOW_LOW
         print(f"Set for dynamic power cycling")
         while True:
 
@@ -72,7 +71,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
             def off_cycle():
                 return (1 - flowrate / FLOW_LOW) * cycle_time
 
-            power = calc_power(flowrate)
+            power = calc_power(FLOW_LOW)
             print(f"Power is {on}")
             print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
             to_stop = on_cycle() if on else off_cycle()
@@ -136,7 +135,7 @@ except KeyboardInterrupt:
     pass
 
 
-for pump in pumps:
+for pump in pumps.values():
     pump.ChangeDutyCycle(0)
     pump.stop()
 IO.cleanup()
