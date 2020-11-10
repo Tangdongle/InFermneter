@@ -61,21 +61,27 @@ async def cycle_pump(idx: int, pwm, on: bool):
     pconfig = PUMP_IDS[idx + 1]
     flowrate = pconfig.flowrate
     cycle_time = pconfig.cycle_time
-    while True:
+    if flowrate <= FLOW_LOW:
+        flowrate = FLOW_LOW
+        print(f"Set for dynamic power cycling")
+        while True:
 
-        def on_cycle():
-            return flowrate / FLOW_LOW * cycle_time
+            def on_cycle():
+                return flowrate / FLOW_LOW * cycle_time
 
-        def off_cycle():
-            return (1 - flowrate / FLOW_LOW) * cycle_time
+            def off_cycle():
+                return (1 - flowrate / FLOW_LOW) * cycle_time
 
-        to_stop = on_cycle() if on else off_cycle()
-        power = calc_power(flowrate)
-        print(f"Power is {on}")
-        print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
-        pwm.ChangeDutyCycle(power if on else 0)
-        await asyncio.sleep(to_stop)
-        on = not on
+            power = calc_power(flowrate)
+            print(f"Power is {on}")
+            print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
+            to_stop = on_cycle() if on else off_cycle()
+            pwm.ChangeDutyCycle(power if on else 0)
+            await asyncio.sleep(to_stop)
+            on = not on
+    else:
+        print(f"Set for static power cycling")
+        pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
 
 
 def calc_power(flowrate: float):
