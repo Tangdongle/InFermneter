@@ -71,7 +71,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
             def off_cycle():
                 return (1 - flowrate / FLOW_LOW) * cycle_time
 
-            power = calc_power(flowrate)
+            power = calc_power(FLOW_LOW)
             print(f"Power is {on}")
             print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
             to_stop = on_cycle() if on else off_cycle()
