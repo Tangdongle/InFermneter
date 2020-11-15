@@ -33,12 +33,14 @@ try:
     # If both the top and bottom sensors are off (0)
     # we need to start the draining cycle
     if (top_val == False and bot_val == False and not DRAINING):
+      print("Draining enabled...")
       DRAINING = True
       IO.output(PUMP_GPIO_OUT, IO.LOW)
 
     # If we have been draining and the bottom sensor turns on
     # we have finished draining and can disable the pump
     if (DRAINING and bot_val == True):
+      print("Draining complete.")
       DRAINING = False
       IO.output(PUMP_GPIO_OUT, IO.HIGH)
 
