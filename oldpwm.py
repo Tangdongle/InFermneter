@@ -26,13 +26,21 @@ FLOW_LOW = 20.0
 
 PUMP_IDS = {
     pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), float(config[f"PUMP{pid}"]["MLPM"]), int(config[f"PUMP{pid}"]["CYCLE_TIME"]))
-    for pid in range(1, 2)
+    for pid in range(1, 3)
 }
 
 MIXER = 23
 
 def calc_off_period(on, cycle_time):
     return cycle_time - on
+
+def calc_power(flowrate: float):
+    return (
+        (0.000562 * pow(flowrate, 3))
+        - (0.053428 * pow(flowrate, 2))
+        + (2.039215 * flowrate)
+        - 2.385384
+    )
 
 async def cycle_mixer_pump(mpump):
     on = True
@@ -55,11 +63,13 @@ async def cycle_mixer_pump(mpump):
         await asyncio.sleep(to_stop)
 
 async def cycle_pump(idx: int, pwm, on: bool):
+    print(f"This is pump {idx} reporting for duty")
     pconfig = PUMP_IDS[idx + 1]
     flowrate = pconfig.flowrate
     cycle_time = pconfig.cycle_time
+    print(f"Pump {idx}: Is {flowrate} lower than {FLOW_LOW}? {flowrate <= FLOW_LOW}")
     if flowrate <= FLOW_LOW:
-        print(f"Set for dynamic power cycling")
+        print(f"Pump {idx}: Set for dynamic power cycling")
         while True:
 
             def on_cycle():
@@ -69,10 +79,11 @@ async def cycle_pump(idx: int, pwm, on: bool):
                 return (1 - flowrate / FLOW_LOW) * cycle_time
 
             power = calc_power(FLOW_LOW)
-            print(f"Power is {on}")
-            print(f"Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
+            print(f"Pump {idx}: Power is {on}")
+            print(f"Pump {idx}: Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
             to_stop = on_cycle() if on else off_cycle()
-            print(f"Sleeping for {to_stop}")
+            if not on:
+                print(f"Pump {idx}: Sleeping for {to_stop}")
             pwm.ChangeDutyCycle(power if on else 0)
             await asyncio.sleep(to_stop)
             on = not on
@@ -80,14 +91,6 @@ async def cycle_pump(idx: int, pwm, on: bool):
         print(f"Set for static power cycling")
         pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
 
-
-def calc_power(flowrate: float):
-    return (
-        (0.000562 * pow(flowrate, 3))
-        - (0.053428 * pow(flowrate, 2))
-        + (2.039215 * flowrate)
-        - 2.385384
-    )
 
 
 def calc_cycle_power(pwms):
@@ -102,10 +105,14 @@ def calc_cycle_power(pwms):
     )
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.gather(*[
-        cycle_pump(idx, pwm, on)
-        for idx, pwm in pwms.items()
-    ] + [cycle_mixer_pump(mixer)]))
+    #loop.run_until_complete(asyncio.gather(*[
+    #    cycle_pump(idx, pwm, on)
+    #    for idx, pwm in pwms.items()
+    #] + [cycle_mixer_pump(mixer)]))
+    loop.run_until_complete(asyncio.gather(
+        cycle_pump(0, pwms[0], on),
+        cycle_pump(1, pwms[1], on)
+    ))
 
 
 frequency = 100
