@@ -1,146 +1,145 @@
-import RPi.GPIO as IO
+import asyncio
+from datetime import datetime
 
-import os
-import signal
-import subprocess
-import sys
-import threading
+import time
+import configparser
+from collections import namedtuple
+try:
+    import RPi.GPIO as IO
+except ImportError:
+    print("No GPIO lib detected. Is this running on the PI and has this library been installed?")
+    quit(1)
 
-from queue import Queue
-from math import exp
+PumpConfig = namedtuple("PumpConfig", ["gpio", "flowrate", "cycle_time"])
+MixerPumpConfig = namedtuple("MixerPumpConfig", ["degas_on", "degas_cycle_time", "on", "cycle_time", "degas_limit"])
 
-import time 
+
 IO.setwarnings(False)
 
-FLOW_MAX = 78.0
+CONFIGFILE = "config.ini"
+
+config = configparser.ConfigParser()
+config.read(CONFIGFILE)
+
+
 FLOW_LOW = 20.0
-CYCLE_TIME = 100
 
-power = 0
+PUMP_IDS = {
+    pid: PumpConfig(int(config[f"PUMP{pid}"]["GPIO"]), float(config[f"PUMP{pid}"]["MLPM"]), int(config[f"PUMP{pid}"]["CYCLE_TIME"]))
+    for pid in range(1, 3)
+}
 
-def calc_power(flowrate):
-  if flowrate < FLOW_LOW:
-    flowrate = FLOW_LOW
-  if flowrate > FLOW_MAX:
-    flowrate = FLOW_MAX
-  return (0.000562 * pow(flowrate, 3)) - (0.053428 * pow(flowrate, 2)) + (2.039215 * flowrate) - 2.385384
-  #return 0.0911 * flowrate - 6.21
+MIXER = 23
 
-def calc_cycle_power(pwm, flowrate):
-  on = True
-  print(f"Starting cycle for flowrate: {flowrate}")
+def calc_off_period(on, cycle_time):
+    return cycle_time - on
 
-  def on_cycle():
-    return flowrate / FLOW_LOW * CYCLE_TIME
+def calc_power(flowrate: float):
+    return (
+        (0.000562 * pow(flowrate, 3))
+        - (0.053428 * pow(flowrate, 2))
+        + (2.039215 * flowrate)
+        - 2.385384
+    )
 
-  def off_cycle():
-    return (1 - flowrate / FLOW_LOW) * CYCLE_TIME
+async def cycle_mixer_pump(mpump):
+    on = True
+    icounter = 0
+    d_on = mpump.degas_on
+    while True:
+        IO.output(MIXER, IO.HIGH if on else IO.LOW)
+        to_stop =  d_on if on else calc_off_period(d_on, mpump.degas_cycle_time)
+        on = not on
+        await asyncio.sleep(to_stop)
+        icounter += 1
+        if icounter >= mpump.degas_limit:
+            break
 
-  while True:
-    print(f"Cycle is {on}")
-    to_stop = on_cycle() if on else off_cycle()
-    print(f"Waiting for  {to_stop}")
-    pwm.ChangeDutyCycle(calc_power(FLOW_LOW) if on else 0)
-    print(f"Setting duty cycle to {calc_power(FLOW_LOW)}")
-    time.sleep(to_stop)
-    on = not on
+    on_time = mpump.on
+    while True:
+        IO.output(MIXER, IO.HIGH if on else IO.LOW)
+        to_stop = on_time if on else calc_off_period(on_time, mpump.cycle_time)
+        on = not on
+        await asyncio.sleep(to_stop)
 
-# GPIO Pins
-clk = 17
-dt = 18
+async def cycle_pump(idx: int, pwm, on: bool):
+    print(f"This is pump {idx} reporting for duty")
+    pconfig = PUMP_IDS[idx + 1]
+    flowrate = pconfig.flowrate
+    cycle_time = pconfig.cycle_time
+    print(f"Pump {idx}: Is {flowrate} lower than {FLOW_LOW}? {flowrate <= FLOW_LOW}")
+    if flowrate <= FLOW_LOW:
+        print(f"Pump {idx}: Set for dynamic power cycling")
+        while True:
 
-dt_val = 0
-clk_val = 0
-fq = 100
+            def on_cycle():
+                return flowrate / FLOW_LOW * cycle_time
 
-last_gpio = None
+            def off_cycle():
+                return (1 - flowrate / FLOW_LOW) * cycle_time
 
-INCREMENT = 5
+            power = calc_power(FLOW_LOW)
+            print(f"Pump {idx}: Power is {on}")
+            print(f"Pump {idx}: Current power is {power} for flowrate {flowrate} for PUMP{idx + 1} with config: {pconfig}")
+            to_stop = on_cycle() if on else off_cycle()
+            if not on:
+                print(f"Pump {idx}: Sleeping for {to_stop}")
+            pwm.ChangeDutyCycle(power if on else 0)
+            await asyncio.sleep(to_stop)
+            on = not on
+    else:
+        print(f"Set for static power cycling")
+        pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
+
+
+
+def calc_cycle_power(pwms):
+    global config
+    on = True
+    mixer = MixerPumpConfig(
+        int(config[f"MIXER"]["DEGAS_ON"]),
+        int(config[f"MIXER"]["DEGAS_CYCLE_TIME"]),
+        int(config[f"MIXER"]["ON"]),
+        int(config[f"MIXER"]["CYCLE_TIME"]),
+        int(config[f"MIXER"]["DEGAS_CYCLE_LIMIT"])
+    )
+
+    loop = asyncio.get_event_loop()
+    #loop.run_until_complete(asyncio.gather(*[
+    #    cycle_pump(idx, pwm, on)
+    #    for idx, pwm in pwms.items()
+    #] + [cycle_mixer_pump(mixer)]))
+    loop.run_until_complete(asyncio.gather(
+        cycle_pump(0, pwms[0], on),
+        cycle_pump(1, pwms[1], on)
+    ))
+
+
+frequency = 100
 
 IO.setmode(IO.BCM)
-#IO.setup(clk,IO.IN, pull_up_down=IO.PUD_DOWN)
-#IO.setup(dt,IO.IN, pull_up_down=IO.PUD_DOWN)
+IO.setup(MIXER, IO.OUT)
 
-IO.setup(12,IO.OUT)
-p = IO.PWM(12,fq)
-p.start(0)
+def setuppump(config: PumpConfig):
+    pin = config.gpio
+    IO.setup(int(pin), IO.OUT)
+    p = IO.PWM(int(pin), frequency)
+    p.start(0)
+    return p
 
-#clkLastState = IO.input(clk)
-counter = 0
-
-def callback(channel):
-    global last_gpio
-    global clk_val
-    global dt_val
-
-    level = IO.input(channel)
-    #if channel == clk:
-    #  clk_val = level
-    #elif channel == dt:
-    #  dt_val = level
-
-    if level != 1:
-      return
-
-    #if (channel != last_gpio):  # (debounce)
-    #  last_gpio = channel
-    #  if channel == dt and clk_val == 1:
-    #    change_callback(1)
-    #  elif channel == clk and dt_val == 1:
-    #    change_callback(-1)
-
-#IO.add_event_detect(dt, IO.BOTH, callback)
-#IO.add_event_detect(clk, IO.BOTH, callback)
-
+pumps = {
+    idx: setuppump(config)
+    for idx, config in enumerate(PUMP_IDS.values())
+}
 try:
-
-
-    #queue = Queue()
-    #event = threading.Event()
-
-    ## Runs in the main thread to handle the work assigned to us by the
-    ## callbacks.
-    #def consume_queue():
-    #  global power
-    #  # If we fall behind and have to process many queue entries at once,
-    #  # we can catch up by only calling `amixer` once at the end.
-    #  while not queue.empty():
-    #    delta = queue.get()
-    #    if delta == 1:
-    #      power += INCREMENT
-    #    elif delta == -1:
-    #      power -= INCREMENT
-    #    if power > 100:
-    #      power = 100
-    #    elif power < 0:
-    #      power = 0
-    #    print(power)
-
     dc = 0
-    ## on_turn and on_press run in the background thread. We want them to do
-    ## as little work as possible, so all they do is enqueue the volume delta.
-    #def change_callback(delta):
-    #  queue.put(delta)
-    #  event.set()
 
-    while True:
-      val = float(input("Flow Rate: "))
-      if val <= FLOW_LOW:
-        calc_cycle_power(p, val)
-
-      dc = calc_power(val)
-      print(dc)
-      p.ChangeDutyCycle(dc)
-      #event.wait(1200)
-      #consume_queue()
-      #event.clear()
-      time.sleep(0.1)
+    calc_cycle_power(pumps)
 except KeyboardInterrupt:
-  pass
+    pass
 
 
-#IO.remove_event_detect(dt)
-#IO.remove_event_detect(clk)
-p.ChangeDutyCycle(0)
-p.stop()
+for pump in pumps.values():
+    pump.ChangeDutyCycle(0)
+    pump.stop()
 IO.cleanup()
