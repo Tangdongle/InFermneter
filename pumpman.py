@@ -20,9 +20,10 @@ except ImportError:
 # If custom config file is defined, use the supplied config file instead
 parser = argparse.ArgumentParser(description="Pump manager")
 parser.add_argument(
-    "config",
+    "--config",
     dest="config_fname",
     default="config.ini",
+    required=False,
     type=str,
     help="Custom config file to use",
 )
@@ -64,7 +65,7 @@ PUMP_IDS = {
         int(config[f"PUMP{pid}"]["GPIO"]),
         float(config[f"PUMP{pid}"]["MLPM"]),
         int(config[f"PUMP{pid}"]["CYCLE_TIME"]),
-        bool(config[f"PUMP{pid}"]["ENABLED"]),
+        bool(int(config[f"PUMP{pid}"]["ENABLED"])),
         int(config[f"PUMP{pid}"]["FREQUENCY"]),
     )
     for pid in range(1, int(config["GENERAL"]["NUM_PUMPS"]) + 1)
@@ -116,10 +117,10 @@ async def cycle_mixer_pump(mpump):
 
             on = not on
             await asyncio.sleep(to_stop)
-            icounter += 1
             if icounter >= mpump.degas_limit:
                 # We're done degassing, move on to normal mixing procedures
                 break
+            icounter += 1
 
     on_time = mpump.on  # Normal mixing pump ON time per cycle
 
@@ -190,11 +191,11 @@ def start_pumps(pwms):
         int(config["MIXER"]["ON"]),
         int(config["MIXER"]["CYCLE_TIME"]),
         bool(config["MIXER"]["ENABLE_CYCLING"]),
-        bool(config["MIXER"]["ENABLED"]),
-        bool(config["MIXER"]["DEGAS"]["DEGAS_ENABLED"]),
-        int(config["MIXER"]["DEGAS"]["DEGAS_ON"]),
-        int(config["MIXER"]["DEGAS"]["DEGAS_CYCLE_LIMIT"]),
-        int(config["MIXER"]["DEGAS"]["DEGAS_CYCLE_TIME"]),
+        bool(int(config["MIXER"]["ENABLED"])),
+        bool(int(config["DEGAS"]["ENABLED"])),
+        int(config["DEGAS"]["DEGAS_ON"]),
+        int(config["DEGAS"]["DEGAS_CYCLE_LIMIT"]),
+        int(config["DEGAS"]["DEGAS_CYCLE_TIME"]),
     )
 
     # Get the loop that will run our pump tasks asynchronously
@@ -245,9 +246,15 @@ try:
         start_pumps(pumps)
     except Exception as e:
         print(f"Quitting/Error: Cleaning up: {e}")
+except:
+    pass
 finally:
-    # cleanup our pins
-    for pump in pumps.values():
-        pump.ChangeDutyCycle(0)
-        pump.stop()
-    IO.cleanup()
+    try:
+        # cleanup our pins
+        for pump in pumps:
+            pump.ChangeDutyCycle(0)
+            pump.stop()
+    except:
+        pass
+    finally:
+        IO.cleanup()
