@@ -4,8 +4,8 @@ Primary pump manager code
 Manages major pumps and degassing sequence
 """
 
+import argparse
 import asyncio
-
 import configparser
 from collections import namedtuple
 
@@ -17,19 +17,40 @@ except ImportError:
     )
     quit(1)
 
+# If custom config file is defined, use the supplied config file instead
+parser = argparse.ArgumentParser(description="Pump manager")
+parser.add_argument(
+    "config",
+    dest="config_fname",
+    default="config.ini",
+    type=str,
+    help="Custom config file to use",
+)
+args = parser.parse_args()
+
+CONFIGFILE = args.config_fname
+
 # A couple of definitions
 PumpConfig = namedtuple(
     "PumpConfig", ["gpio", "flowrate", "cycle_time", "enabled", "frequency"]
 )
 MixerPumpConfig = namedtuple(
     "MixerPumpConfig",
-    ["on", "cycle_time", "enabled", "degas_on", "degas_limit", "degas_cycle_time"],
+    [
+        "on",
+        "cycle_time",
+        "cycle_enabled",
+        "enabled",
+        "degas_enabled",
+        "degas_on",
+        "degas_limit",
+        "degas_cycle_time",
+    ],
 )
 
 # Don't alert us about stupid shit
 IO.setwarnings(False)
 
-CONFIGFILE = "config.ini"
 
 config = configparser.ConfigParser()
 config.read(CONFIGFILE)
@@ -84,27 +105,34 @@ async def cycle_mixer_pump(mpump):
     on = True  # Is cycle on?
     icounter = 0  # Degassing iteration counter
 
-    d_on = mpump.degas_on  # Degas phase on time per cycle
-    while True:
-        # If the degas cycle is on, turn it off and vice versa
-        IO.output(MIXER, IO.HIGH if on else IO.LOW)
-        # Calculate how long between the next cycle
-        to_stop = d_on if on else calc_off_period(d_on, mpump.degas_cycle_time)
+    #
+    if mpump.degas_enabled:
+        d_on = mpump.degas_on  # Degas phase on time per cycle
+        while True:
+            # If the degas cycle is on, turn it off and vice versa
+            IO.output(MIXER, IO.HIGH if on else IO.LOW)
+            # Calculate how long between the next cycle
+            to_stop = d_on if on else calc_off_period(d_on, mpump.degas_cycle_time)
 
-        on = not on
-        await asyncio.sleep(to_stop)
-        icounter += 1
-        if icounter >= mpump.degas_limit:
-            # We're done degassing, move on to normal mixing procedures
-            break
+            on = not on
+            await asyncio.sleep(to_stop)
+            icounter += 1
+            if icounter >= mpump.degas_limit:
+                # We're done degassing, move on to normal mixing procedures
+                break
 
     on_time = mpump.on  # Normal mixing pump ON time per cycle
-    # Alternate between turning the mixing pumps on and off
-    while True:
-        IO.output(MIXER, IO.HIGH if on else IO.LOW)
-        to_stop = on_time if on else calc_off_period(on_time, mpump.cycle_time)
-        on = not on
-        await asyncio.sleep(to_stop)
+
+    if mpump.cycle_enabled:
+        # Alternate between turning the mixing pumps on and off
+        while True:
+            IO.output(MIXER, IO.HIGH if on else IO.LOW)
+            to_stop = on_time if on else calc_off_period(on_time, mpump.cycle_time)
+            on = not on
+            await asyncio.sleep(to_stop)
+    else:
+        # If cycling is not enabled, switch the pumps on and leave it
+        IO.output(MIXER, IO.HIGH)
 
 
 async def cycle_pump(idx: int, pwm, on: bool):
@@ -161,7 +189,9 @@ def start_pumps(pwms):
     mixer = MixerPumpConfig(
         int(config["MIXER"]["ON"]),
         int(config["MIXER"]["CYCLE_TIME"]),
+        bool(config["MIXER"]["ENABLE_CYCLING"]),
         bool(config["MIXER"]["ENABLED"]),
+        bool(config["MIXER"]["DEGAS"]["DEGAS_ENABLED"]),
         int(config["MIXER"]["DEGAS"]["DEGAS_ON"]),
         int(config["MIXER"]["DEGAS"]["DEGAS_CYCLE_LIMIT"]),
         int(config["MIXER"]["DEGAS"]["DEGAS_CYCLE_TIME"]),
