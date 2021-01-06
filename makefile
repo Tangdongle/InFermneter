@@ -1,12 +1,11 @@
-DB=db.db
 PYTHON=$(which python3)
 
-build:
-	sudo apt install git python3 python3-pip sqlite3 git-core python3-gpiozero
-	cd infbeer_pwm
+install:
+	sudo apt install git python3 python3-pip git-core python3-gpiozero
 	pip3 install -r requirements.txt
-	touch $(DB)
-	python3 db.py
 
+run_pumpman:
+	python3 pumpman.py &
 
-
+run_transfer_tank:
+	python3 transfer_tank.py &
