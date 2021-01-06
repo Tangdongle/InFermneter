@@ -46,7 +46,7 @@ PUMP_IDS = {
         bool(config[f"PUMP{pid}"]["ENABLED"]),
         int(config[f"PUMP{pid}"]["FREQUENCY"]),
     )
-    for pid in range(1, 3)
+    for pid in range(1, int(config["GENERAL"]["NUM_PUMPS"]) + 1)
 }
 
 # Get our mixer GPIO pin number from config
