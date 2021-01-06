@@ -106,8 +106,8 @@ async def cycle_mixer_pump(mpump):
     on = True  # Is cycle on?
     icounter = 0  # Degassing iteration counter
 
-    #
     if mpump.degas_enabled:
+        print("Beginning degassing sequence")
         d_on = mpump.degas_on  # Degas phase on time per cycle
         while True:
             # If the degas cycle is on, turn it off and vice versa
@@ -120,8 +120,10 @@ async def cycle_mixer_pump(mpump):
             if icounter >= mpump.degas_limit:
                 # We're done degassing, move on to normal mixing procedures
                 break
-            icounter += 1
+            if not on:
+                icounter += 1
 
+        print("Ending degassing sequence")
     on_time = mpump.on  # Normal mixing pump ON time per cycle
 
     if mpump.cycle_enabled:
