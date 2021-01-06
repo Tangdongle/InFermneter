@@ -28,6 +28,9 @@ PUMP_GPIO_OUT = int(config["TRANSFER"]["PUMP_GPIO_OUT"])
 # While this is TRUE (1), the pump relay will be active
 DRAINING = True if config["TRANSFER"]["START_DRAINING"] == "True" else False
 
+# Offset to continue draining after the bottom transfer sensor has been activated
+DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
+
 IO.setmode(IO.BCM)
 IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN)
 IO.setup(TANK_TOP_GPIO_IN, IO.IN)
@@ -50,7 +53,8 @@ try:
         # If we have been draining and the bottom sensor turns on
         # we have finished draining and can disable the pump
         if DRAINING and bot_val:
-            print("Draining complete.")
+            print(f"Draining complete in {DRAIN_DELAY} seconds.")
+            time.sleep(DRAIN_DELAY)
             DRAINING = False
             IO.output(PUMP_GPIO_OUT, IO.HIGH)
 
