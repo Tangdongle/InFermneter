@@ -14,9 +14,9 @@ import time
 # While this is TRUE (1), the pump relay will be active
 DRAINING = False
 
-TANK_BOTTOM_GPIO_IN = 15
-TANK_TOP_GPIO_IN = 14
-PUMP_GPIO_OUT = 2
+TANK_BOTTOM_GPIO_IN = 18
+TANK_TOP_GPIO_IN = 15
+PUMP_GPIO_OUT = 8
 
 IO.setmode(IO.BCM)
 IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN)
