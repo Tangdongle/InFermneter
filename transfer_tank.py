@@ -21,6 +21,8 @@ if not bool(config["TRANSFER"]["ENABLED"]):
     print("Transfer tank disabled, exiting")
     quit(0)
 
+ENABLE_CONSTANT_ON = bool(int(config["TRANSFER"]["ALWAYS_ON"]))
+
 TANK_BOTTOM_GPIO_IN = int(config["TRANSFER"]["BOTTOM_GPIO"])
 TANK_TOP_GPIO_IN = int(config["TRANSFER"]["TOP_GPIO"])
 PUMP_GPIO_OUT = int(config["TRANSFER"]["PUMP_GPIO_OUT"])
@@ -39,25 +41,29 @@ IO.setup(PUMP_GPIO_OUT, IO.OUT)
 IO.output(PUMP_GPIO_OUT, IO.HIGH)
 
 try:
-    while True:
-        top_val = IO.input(TANK_TOP_GPIO_IN)
-        bot_val = IO.input(TANK_BOTTOM_GPIO_IN)
+    if ENABLE_CONSTANT_ON:
+        IO.output(PUMP_GPIO_OUT, IO.HIGH)
+    else:
+        while True:
+            top_val = IO.input(TANK_TOP_GPIO_IN)
+            bot_val = IO.input(TANK_BOTTOM_GPIO_IN)
 
-        # If both the top and bottom sensors are off (0)
-        # we need to start the draining cycle
-        if top_val and bot_val and not DRAINING:
-            print("Draining enabled...")
-            DRAINING = True
-            IO.output(PUMP_GPIO_OUT, IO.LOW)
+            # If both the top and bottom sensors are off (0)
+            # we need to start the draining cycle
+            if top_val and bot_val and not DRAINING:
+                print("Draining enabled...")
+                DRAINING = True
+                IO.output(PUMP_GPIO_OUT, IO.LOW)
 
-        # If we have been draining and the bottom sensor turns on
-        # we have finished draining and can disable the pump
-        if DRAINING and bot_val:
-            print(f"Draining complete in {DRAIN_DELAY} seconds.")
-            time.sleep(DRAIN_DELAY)
-            DRAINING = False
-            IO.output(PUMP_GPIO_OUT, IO.HIGH)
+            # If we have been draining and the bottom sensor turns on
+            # we have finished draining and can disable the pump
+            if DRAINING and bot_val:
+                print(f"Draining complete in {DRAIN_DELAY} seconds.")
+                time.sleep(DRAIN_DELAY)
 
-        time.sleep(0.5)
+                DRAINING = False
+                IO.output(PUMP_GPIO_OUT, IO.HIGH)
+
+            time.sleep(0.5)
 finally:
     IO.cleanup()
