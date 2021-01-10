@@ -49,6 +49,11 @@ Symlink the `temp_sensor_log.py` file to somewhere available in the system PATH.
 
 Then, chmod +x the script to enable it to be run.
 
-Finally, configure the crontab to run every 5 minutes to get the temperature changes.
+Configure the crontab to run every 5 minutes to get the temperature changes.
 
-
+Finally, edit the file `/etc/modules` and add the following:
+```sh
+# /etc/modules
+w1-gpio pullup=1
+w1-therm
+```
