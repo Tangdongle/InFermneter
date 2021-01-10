@@ -34,8 +34,8 @@ DRAINING = True if config["TRANSFER"]["START_DRAINING"] == "True" else False
 DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
 
 IO.setmode(IO.BCM)
-IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN)
-IO.setup(TANK_TOP_GPIO_IN, IO.IN)
+IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
+IO.setup(TANK_TOP_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(PUMP_GPIO_OUT, IO.OUT)
 
 IO.output(PUMP_GPIO_OUT, IO.HIGH)
@@ -50,7 +50,7 @@ try:
 
             # If both the top and bottom sensors are off (0)
             # we need to start the draining cycle
-            if top_val and bot_val and not DRAINING:
+            if not top_val and not bot_val and not DRAINING:
                 print("Draining enabled...")
                 DRAINING = True
                 IO.output(PUMP_GPIO_OUT, IO.LOW)

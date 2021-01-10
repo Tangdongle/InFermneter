@@ -122,6 +122,7 @@ async def cycle_mixer_pump(mpump):
                 break
             if not on:
                 icounter += 1
+            await asyncio.sleep(0.5)
 
         print("Ending degassing sequence")
     on_time = mpump.on  # Normal mixing pump ON time per cycle
@@ -173,6 +174,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
             pwm.ChangeDutyCycle(power if on else 0)
             await asyncio.sleep(to_stop)
             on = not on
+            await asyncio.sleep(0.5)
     else:
         print("Set for static power cycling")
         pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
