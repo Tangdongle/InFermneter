@@ -34,3 +34,21 @@ The temperature sensor module is responsible for reading and broadcasting data t
 ## Installation
 
 The required libraries can be installed by running the `install` make target
+
+## Temperature Sensore Setup
+
+The OneWire protocol directly writes to a file. The filename should be located at `/sys/bus/w1/devices/<device_id>/w1_slave`
+
+Make sure the correct modules are loaded
+```sh
+sudo modprobe w1-gpio pullup=1
+sudo modprobe w1-therm
+```
+
+Symlink the `temp_sensor_log.py` file to somewhere available in the system PATH.
+
+Then, chmod +x the script to enable it to be run.
+
+Finally, configure the crontab to run every 5 minutes to get the temperature changes.
+
+
