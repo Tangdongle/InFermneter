@@ -12,7 +12,18 @@ import RPi.GPIO as IO
 import time
 import configparser
 
-CONFIGFILE = "config.ini"
+parser = argparse.ArgumentParser(description="Pump manager")
+parser.add_argument(
+    "--config",
+    dest="config_fname",
+    default="config.ini",
+    required=False,
+    type=str,
+    help="Custom config file to use",
+)
+args = parser.parse_args()
+
+CONFIGFILE = args.config_fname
 
 config = configparser.ConfigParser()
 config.read(CONFIGFILE)
