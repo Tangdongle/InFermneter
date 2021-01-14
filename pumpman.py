@@ -128,6 +128,7 @@ async def cycle_mixer_pump(mpump):
     on_time = mpump.on  # Normal mixing pump ON time per cycle
 
     if mpump.cycle_enabled:
+        print("[MIXER] Cycling Enabled")
         # Alternate between turning the mixing pumps on and off
         while True:
             IO.output(MIXER, IO.HIGH if on else IO.LOW)
@@ -135,8 +136,11 @@ async def cycle_mixer_pump(mpump):
             on = not on
             await asyncio.sleep(to_stop)
     else:
+        print("[MIXER] Constant operation")
         # If cycling is not enabled, switch the pumps on and leave it
         IO.output(MIXER, IO.HIGH)
+        while True:
+          await asyncio.sleep(1000)
 
 async def cycle_pump(idx: int, pwm, on: bool):
     """
@@ -197,7 +201,7 @@ def start_pumps(pwms):
     mixer = MixerPumpConfig(
         int(config["MIXER"]["ON"]),
         int(config["MIXER"]["CYCLE_TIME"]),
-        bool(config["MIXER"]["ENABLE_CYCLING"]),
+        bool(int(config["MIXER"]["ENABLE_CYCLING"])),
         bool(int(config["MIXER"]["ENABLED"])),
         bool(int(config["DEGAS"]["ENABLED"])),
         int(config["DEGAS"]["DEGAS_ON"]),
