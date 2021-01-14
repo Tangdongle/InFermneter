@@ -25,7 +25,7 @@ config.read(CONFIGFILE)
 PUMP_GPIO_OUT = int(config["AIRPUMP"]["PUMP_GPIO_OUT"])
 if PUMP_GPIO_OUT == -1:
     print("No GPIO set")
-    return
+    quit(1)
 
 # File to write timestamp of last run to
 TS_FILE = config["AIRPUMP"]["TS_FILE"]

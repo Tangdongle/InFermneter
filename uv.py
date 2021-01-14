@@ -27,7 +27,7 @@ config.read(CONFIGFILE)
 PUMP_GPIO_OUT = int(config["UV"]["PUMP_GPIO_OUT"])
 if PUMP_GPIO_OUT == -1:
     print("No GPIO set")
-    return
+    quit(1)
 
 # File to write timestamp of last run to
 TS_FILE = config["UV"]["TS_FILE"]
@@ -37,17 +37,24 @@ FREQUENCY = int(config["UV"]["FREQUENCY"])
 TS_STR_REPLACE_TZ_OFFSET = -6
 
 IO.setmode(IO.BCM)
-IO.setup(PUMP_GPIO_OUT, IO.OUT, initial=IO.LOW)
+IO.setup(PUMP_GPIO_OUT, IO.OUT, initial=IO.HIGH)
 
-with open(TS_FILE, "rb") as ts:
-    last_run = datetime.strptime(ts.read()[:TS_STR_REPLACE_TZ_OFFSET], TS_STR_FORMAT)
-    if last_run >= datetime.now(timezone.utc) - timedelta(days=FREQUENCY):
-        print("Time's not up, keep waiting")
-        IO.output(IO.LOW)  # make sure the UV is off
-    else:
-        # Switch the UV on and let cron do it's job of checking every X minutes
-        IO.output(IO.HIGH)
+NOFILE = False
+try:
+    with open(TS_FILE, "rb") as ts:
+        last_run = datetime.strptime(ts.read()[:TS_STR_REPLACE_TZ_OFFSET], TS_STR_FORMAT)
+        if last_run >= datetime.now(timezone.utc) - timedelta(days=FREQUENCY):
+            print("Time's not up, keep waiting")
+            IO.output(IO.HIGH)  # make sure the UV is off
+        else:
+            # Switch the UV on and let cron do it's job of checking every X minutes
+            IO.output(IO.LOW)
+except FileNotFoundError:
+    NOFILE = True
 
+# If we have no timestamp, run anyway
+if NOFILE:
+    IO.output(IO.LOW)
 # Write the timestamp
 with open(TS_FILE, "wb") as ts:
     timestamp = datetime.now(timezone.utc).isoformat()
