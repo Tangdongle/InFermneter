@@ -11,6 +11,7 @@ Pump stays active until bottom sensor is back on
 import RPi.GPIO as IO
 import time
 import configparser
+import argparse
 
 parser = argparse.ArgumentParser(description="Pump manager")
 parser.add_argument(
