@@ -138,11 +138,12 @@ async def cycle_mixer_pump(mpump):
         # If cycling is not enabled, switch the pumps on and leave it
         IO.output(MIXER, IO.HIGH)
 
-
 async def cycle_pump(idx: int, pwm, on: bool):
     """
     Cycle logic for main pumps
     """
+    print(f"Cycling pump {idx}")
+
     # Which pump are we looking at?
     pconfig = PUMP_IDS[idx + 1]
 
@@ -178,6 +179,8 @@ async def cycle_pump(idx: int, pwm, on: bool):
     else:
         print("Set for static power cycling")
         pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
+        while True:
+             await asyncio.sleep(1000)
 
 
 def start_pumps(pwms):
@@ -214,9 +217,9 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled and pwm  # Only activate pump if enabled
             ]
-            + [cycle_mixer_pump(mixer)]
-            if mixer.enabled
-            else []
+#            + [cycle_mixer_pump(mixer)]
+#            if mixer.enabled
+#            else []
         )
     )
 
@@ -239,6 +242,7 @@ try:
             IO.setup(int(pin), IO.OUT)
             p = IO.PWM(int(pin), config.frequency)
             p.start(0)
+            print(f"Setting up pump {pin} with PWM frequency {config.frequency}")
             return p
 
     # Set up our pumps, ignoring any disabled ones
