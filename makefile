@@ -5,13 +5,13 @@ install:
 	pip3 install -r requirements.txt
 
 run_pumpman1:
-	python3 pumpman.py --config=config_pm1.ini &
+	python3 pumpman.py --config=config_pm1.ini
 
 run_transfer_tank1:
-	python3 transfer_tank.py --config=config_pm1.ini &
+	python3 transfer_tank.py --config=config_pm1.ini
 
 run_pumpman2:
-	python3 pumpman.py --config=config_pm2.ini &
+	python3 pumpman.py --config=config_pm2.ini
 
 run_transfer_tank2:
-	python3 transfer_tank.py --config=config_pm2.ini &
+	python3 transfer_tank.py --config=config_pm2.ini
