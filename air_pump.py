@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import time
 import argparse
 
+from .utilities import get_last_timestamp, update_timestamp_file
+
 parser = argparse.ArgumentParser(description="Air Pump Manager")
 parser.add_argument(
     "--config",
@@ -40,23 +42,6 @@ IO.setmode(IO.BCM)
 IO.setup(PUMP_GPIO_OUT, IO.OUT, initial=IO.HIGH)
 NOFILE = False
 
-def get_last_timestamp():
-    last_run = datetime.now(timezone.utc) - timedelta(days=FREQUENCY)
-
-    try:
-        with open(TS_FILE, "r") as ts:
-            last_run = datetime.strptime(ts.read()[:TS_STR_REPLACE_TZ_OFFSET], TS_STR_FORMAT)
-            last_run = last_run.replace(tzinfo=timezone.utc)
-    except FileNotFoundError:
-        pass
-
-    return last_run
-
-def update_timestamp_file():
-    print("Updating timestamp file with new timestamp")
-    with open(TS_FILE, "w") as ts:
-        timestamp = datetime.now(timezone.utc).isoformat()
-        ts.write(timestamp)
 
 def cycle(seconds):
     print(f"Turning air pump on for {seconds} seconds")
@@ -67,11 +52,11 @@ def cycle(seconds):
 
 
 while True:
-    last_cycle = get_last_timestamp()
+    last_cycle = get_last_timestamp(TS_FILE, FREQUENCY)
     next_run = last_cycle + timedelta(days=FREQUENCY)
 
     if datetime.now(timezone.utc) >= next_run:
-        update_timestamp_file()
+        update_timestamp_file(TS_FILE)
         cycle(CYCLE_TIME)
 
     # sleeping for 3 hours after each successive cycle
