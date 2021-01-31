@@ -35,12 +35,25 @@ parser.add_argument(
     type=str,
     help="File to lock draining",
 )
+parser.add_argument(
+    "--force-drain-lock-file",
+    dest="force_drain_fname",
+    default="f.draining.lock",
+    required=False,
+    type=str,
+    help="File to count force lock draining",
+)
 args = parser.parse_args()
 
 CONFIGFILE = args.config_fname
 DRAIN_FILELOCK = args.drain_fname
+FORCE_DRAIN_FILELOCK = args.force_drain_fname
 LAST_DRAINED = None
+LAST_FORCE_DRAINED = None
 
+# When to force the pump to run
+DATE_TO_START = datetime.now(timezone.utc).replace(hour=12)
+DATE_TO_START = DATE_TO_START.replace(tzinfo=timezone.utc)
 
 config = configparser.ConfigParser()
 config.read(CONFIGFILE)
@@ -85,6 +98,15 @@ try:
                 DRAINING = True
                 IO.output(PUMP_GPIO_OUT, IO.LOW)
                 update_timestamp_file(DRAIN_FILELOCK)
+            elif not DRAINING and not bot_val and datetime.now(timezone.utc).hour >= DATE_TO_START.hour:
+                last_force_drained = get_last_timestamp(FORCE_DRAIN_FILELOCK, minutes=2)
+                if last_force_drained >= datetime.now(timezone.utc) - timedelta(days=1):
+                    print("Force drained already lest than a day ago")
+                else:
+                    DRAINING = True
+                    IO.output(PUMP_GPIO_OUT, IO.LOW)
+                    update_timestamp_file(FORCE_DRAIN_FILELOCK)
+
 
             # If we have been draining and the bottom sensor turns on
             # we have finished draining and can disable the pump
