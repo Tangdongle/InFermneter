@@ -197,6 +197,7 @@ def start_pumps(pwms):
     # Default to on
     on = True
 
+    print("Starting pump loop")
     # Set up our mixer
     mixer = MixerPumpConfig(
         int(config["MIXER"]["ON"]),
@@ -213,17 +214,18 @@ def start_pumps(pwms):
     # Think of this as a while True loop with no breaking condition
     loop = asyncio.get_event_loop()
 
+    print(pwms)
     # As our async tasks never complete, this runs indefinitely
     loop.run_until_complete(
         asyncio.gather(
             *[
                 cycle_pump(idx, pwm, on)
                 for (idx, pwm, enabled) in pwms
-                if enabled and pwm  # Only activate pump if enabled
+                if enabled  # Only activate pump if enabled
             ]
-#            + [cycle_mixer_pump(mixer)]
-#            if mixer.enabled
-#            else []
+            #+ [cycle_mixer_pump(mixer)]
+            #if mixer.enabled
+            #else []
         )
     )
 
@@ -253,14 +255,18 @@ try:
     pumps = [
         (idx, setuppump(config), config.enabled)
         for idx, config in enumerate(PUMP_IDS.values())
+	if config.enabled
     ]
+    print(pumps)
     try:
         start_pumps(pumps)
     except Exception as e:
         print(f"Quitting/Error: Cleaning up: {e}")
-except:
+except Exception as e:
+    print(e)
     pass
 finally:
+    print("Cleaning up")
     try:
         # cleanup our pins
         for pump in pumps:
