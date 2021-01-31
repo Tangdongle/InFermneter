@@ -15,7 +15,7 @@ import argparse
 import requests
 from datetime import timedelta, datetime, timezone
 
-from .utilities import get_last_timestamp, update_timestamp_file
+from utilities import get_last_timestamp, update_timestamp_file
 
 parser = argparse.ArgumentParser(description="Pump manager")
 parser.add_argument(

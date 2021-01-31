@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import time
 import argparse
 
-from .utilities import get_last_timestamp, update_timestamp_file
+from utilities import get_last_timestamp, update_timestamp_file
 
 parser = argparse.ArgumentParser(description="Air Pump Manager")
 parser.add_argument(
