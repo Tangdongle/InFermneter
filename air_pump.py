@@ -52,7 +52,7 @@ def cycle(seconds):
 
 
 while True:
-    last_cycle = get_last_timestamp(TS_FILE, FREQUENCY)
+    last_cycle = get_last_timestamp(TS_FILE, days=FREQUENCY)
     next_run = last_cycle + timedelta(days=FREQUENCY)
 
     if datetime.now(timezone.utc) >= next_run:
