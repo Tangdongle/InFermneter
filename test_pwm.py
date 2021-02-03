@@ -10,8 +10,7 @@ for channel in channels:
 
 for time in range(0, 4):
     for channel in channels:
-        for brightness in range(0, 100):
-            wiringpi.softPwmWrite(channel, 100)
-            wiringpi.delay(10)
-            wiringpi.softPwmWrite(channel, 0)
-        wiringpi.delay(10)
+        wiringpi.softPwmWrite(channel, 100)
+    wiringpi.delay(10)
+    for channel in channels:
+        wiringpi.softPwmWrite(channel, 0)
