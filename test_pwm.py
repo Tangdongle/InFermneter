@@ -2,12 +2,18 @@ import wiringpi
 
 OUTPUT = 1
 
-wiringpi.wiringPiSetup()
-channel = 17
-wiringpi.pinMode(channel, OUTPUT)
-wiringpi.softPwmCreate(channel, 0, 100)
+wiringpi.wiringPiSetupGpio()
+channels = [17, 18, 19, 20, 21, 22, 23, 24, 25]
 
-wiringpi.softPwmWrite(channel, 100)
-print("Starting loop")
-while True:
-    pass
+for channel in channels:
+    pwm_success = wiringpi.softPwmCreate(channel, 0, 100)
+    print(pwm_success)
+
+    wiringpi.softPwmWrite(channel, 75)
+
+try:
+    while True:
+        wiringpi.delay(1000)
+finally:
+    wiringpi.softPwmWrite(channel, 0)
+    print("cleaning up")
