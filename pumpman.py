@@ -223,9 +223,9 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled  # Only activate pump if enabled
             ]
-            #+ [cycle_mixer_pump(mixer)]
-            #if mixer.enabled
-            #else []
+            + [cycle_mixer_pump(mixer)]
+            if mixer.enabled
+            else []
         )
     )
 
