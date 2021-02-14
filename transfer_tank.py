@@ -79,6 +79,7 @@ DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
 
 LAST_FORCE_RUN = None
 LAST_FORCE_RUN_FNAME = "ttank_force.lock"
+IS_FORCE_FLUSHING = False
 
 
 IO.setmode(IO.BCM)
@@ -104,21 +105,22 @@ try:
             Then we give the tank a "goodnight" flush
             """
             now = datetime.now(timezone.utc)
+            LAST_FORCE_RUN_TIME = get_last_timestamp(LAST_FORCE_RUN_FNAME, minutes=0)
             if (
                 now.hour >= 12
-                and (
-                    not LAST_FORCE_RUN
-                    or (
-                        LAST_FORCE_RUN.day != now.day
-                        and LAST_FORCE_RUN.month != now.month
-                    )
-                )
+                and (not LAST_FORCE_RUN
+                or (
+                    LAST_FORCE_RUN_TIME.day != now.day
+                    and LAST_FORCE_RUN_TIME.month != now.month
+                ))
                 and not bot_val
             ):
                 print("Force flushing")
                 DRAINING = True
-                LAST_FORCE_RUN = update_timestamp_file(LAST_FORCE_RUN_FNAME)
+                LAST_FORCE_RUN = datetime.now(timezone.utc)
+                update_timestamp_file(LAST_FORCE_RUN_FNAME)
                 IO.output(PUMP_GPIO_OUT, IO.LOW)
+                IS_FORCE_FLUSHING = True
 
             # If both the top and bottom sensors are off (0)
             # we need to start the draining cycle
@@ -135,8 +137,9 @@ try:
                 time.sleep(DRAIN_DELAY)
 
                 DRAINING = False
+                IS_FORCE_FLUSHING = False
                 IO.output(PUMP_GPIO_OUT, IO.HIGH)
-            elif DRAINING:
+            elif DRAINING and not IS_FORCE_FLUSHING:
                 # If the system has been draining for more than 2 minutes,
                 # we want to forcefully switch it off and send an alert!
                 LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK, minutes=2)
@@ -161,4 +164,3 @@ try:
             time.sleep(0.5)
 finally:
     IO.cleanup()
-    patcher.stop()
