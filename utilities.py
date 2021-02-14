@@ -10,6 +10,7 @@ def update_timestamp_file(fname):
     with open(fname, "w") as ts:
         timestamp = datetime.now(timezone.utc).isoformat()
         ts.write(timestamp)
+        return timestamp
 
 
 def get_last_timestamp(fname, **kwargs):
