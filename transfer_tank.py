@@ -56,6 +56,13 @@ CONFIGFILE = args.config_fname
 DRAIN_FILELOCK = args.drain_fname
 LAST_DRAINED = None
 
+DRAIN_HOURS = [
+    x - 8 for x in
+    [11, 14, 17, 20]
+]
+
+HAS_DRAINED_THIS_HOUR = False
+
 
 config = configparser.ConfigParser()
 config.read(CONFIGFILE)
@@ -77,18 +84,13 @@ DRAINING = True if config["TRANSFER"]["START_DRAINING"] == "True" else False
 # Offset to continue draining after the bottom transfer sensor has been activated
 DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
 
-LAST_FORCE_RUN = None
-LAST_FORCE_RUN_FNAME = "ttank_force.lock"
-IS_FORCE_FLUSHING = False
-
-
+# GPIO setup
 IO.setmode(IO.BCM)
 IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(TANK_TOP_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(PUMP_GPIO_OUT, IO.OUT)
 
 IO.output(PUMP_GPIO_OUT, IO.HIGH)
-
 
 try:
     if ENABLE_CONSTANT_ON:
@@ -107,20 +109,15 @@ try:
             now = datetime.now(timezone.utc)
             LAST_FORCE_RUN_TIME = get_last_timestamp(LAST_FORCE_RUN_FNAME, minutes=0)
             if (
-                now.hour >= 12
-                and (not LAST_FORCE_RUN
-                or (
-                    LAST_FORCE_RUN_TIME.day != now.day
-                    and LAST_FORCE_RUN_TIME.month != now.month
-                ))
-                and not bot_val
+                now.hour in DRAIN_HOURS
+                and not HAS_DRAINED_THIS_HOUR
             ):
                 print("Force flushing")
                 DRAINING = True
-                LAST_FORCE_RUN = datetime.now(timezone.utc)
-                update_timestamp_file(LAST_FORCE_RUN_FNAME)
+                HAS_DRAINED_THIS_HOUR = True
                 IO.output(PUMP_GPIO_OUT, IO.LOW)
-                IS_FORCE_FLUSHING = True
+            elif HAS_DRAINED_THIS_HOUR and now.hour not in DRAIN_HOURS:
+                HAS_DRAINED_THIS_HOUR = False
 
             # If both the top and bottom sensors are off (0)
             # we need to start the draining cycle
