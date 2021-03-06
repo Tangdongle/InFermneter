@@ -133,12 +133,11 @@ try:
                 time.sleep(DRAIN_DELAY)
 
                 DRAINING = False
-                IS_FORCE_FLUSHING = False
                 IO.output(PUMP_GPIO_OUT, IO.HIGH)
-            elif DRAINING and not IS_FORCE_FLUSHING:
+            elif DRAINING:
                 # If the system has been draining for more than 2 minutes,
                 # we want to forcefully switch it off and send an alert!
-                LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK, minutes=2)
+                LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK)
                 if datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(
                     minutes=2
                 ):
