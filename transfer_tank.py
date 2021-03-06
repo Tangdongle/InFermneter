@@ -107,7 +107,6 @@ try:
             Then we give the tank a "goodnight" flush
             """
             now = datetime.now(timezone.utc)
-            LAST_FORCE_RUN_TIME = get_last_timestamp(LAST_FORCE_RUN_FNAME, minutes=0)
             if (
                 now.hour in DRAIN_HOURS
                 and not HAS_DRAINED_THIS_HOUR
