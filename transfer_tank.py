@@ -40,6 +40,7 @@ args = parser.parse_args()
 CONFIGFILE = args.config_fname
 DRAIN_FILELOCK = args.drain_fname
 LAST_DRAINED = None
+HAS_PRIMED = False
 
 
 config = configparser.ConfigParser()
@@ -61,18 +62,21 @@ DRAINING = True if config["TRANSFER"]["START_DRAINING"] == "True" else False
 
 # Offset to continue draining after the bottom transfer sensor has been activated
 DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
+GPIO_14 = 14
 
 
 IO.setmode(IO.BCM)
 IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(TANK_TOP_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(PUMP_GPIO_OUT, IO.OUT)
+IO.setup(GPIO_14, IO.OUT)
 
 IO.output(PUMP_GPIO_OUT, IO.HIGH)
+IO.output(GPIO_14, IO.HIGH)
 
 try:
     if ENABLE_CONSTANT_ON:
-        IO.output(PUMP_GPIO_OUT, IO.HIGH)
+      IO.output(PUMP_GPIO_OUT, IO.HIGH)
     else:
         while True:
             top_val = IO.input(TANK_TOP_GPIO_IN)
@@ -81,35 +85,49 @@ try:
             # If both the top and bottom sensors are off (0)
             # we need to start the draining cycle
             if not top_val and not bot_val and not DRAINING:
-                print("Draining enabled...")
-                DRAINING = True
-                IO.output(PUMP_GPIO_OUT, IO.LOW)
-                update_timestamp_file(DRAIN_FILELOCK)
-
+              print("Draining enabled...")
+              DRAINING = True
+              IO.output(PUMP_GPIO_OUT, IO.LOW)
+              update_timestamp_file(DRAIN_FILELOCK)
             # If we have been draining and the bottom sensor turns on
             # we have finished draining and can disable the pump
             if DRAINING and bot_val:
-                print(f"Draining complete in {DRAIN_DELAY} seconds.")
-                time.sleep(DRAIN_DELAY)
+              print(f"Draining complete in {DRAIN_DELAY} seconds.")
+              time.sleep(DRAIN_DELAY)
 
-                DRAINING = False
-                IO.output(PUMP_GPIO_OUT, IO.HIGH)
+              DRAINING = False
+              IO.output(PUMP_GPIO_OUT, IO.HIGH)
             elif DRAINING:
+              LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK, minutes=2)
+              two_plus_mins_in = datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=2)
+              one_min_in = datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=1) 
+          
+              if one_min_in and not two_plus_mins_in and not HAS_PRIMED:
+                # If the system has been draining for more than 1 minute,
+                # we want to turn the priming valve on for 1 second
+                # Now the System has been draining for more than 1 minute
+                DRAINING = True
+                HAS_PRIMED = True
+                # Set priming tank on
+                IO.output(GPIO_14, IO.LOW)
+                time.sleep(1)
+                # Set priming tank back off
+                IO.output(GPIO_14, IO.HIGH)
+              # If more than one min and the priming has run
+              elif two_plus_mins_in:
                 # If the system has been draining for more than 2 minutes,
                 # we want to forcefully switch it off and send an alert!
-                LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK, minutes=2)
-                if datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=2):
-                    # System has been draining for more than 2 minures
-                    DRAINING = False
-                    IO.output(PUMP_GPIO_OUT, IO.HIGH)
-                    data = {
-                        "last_drained": LAST_DRAINED,
-                        "emsg": "Transfer tank pump running for > 2 mins"
-                    }
-                    requests.post("https://beer.tanger.dev/ttankmon", headers={"Content-Type": "application/json"}, data=data)
-                    print("Shutting down transfer tank code")
-                    quit(1)
+                # System has been draining for more than 2 minures
+                DRAINING = False
+                IO.output(PUMP_GPIO_OUT, IO.HIGH)
+                data = {
+                    "last_drained": LAST_DRAINED,
+                    "emsg": "Transfer tank pump running for > 2 mins"
+                }
+                requests.post("https://beer.tanger.dev/ttankmon", headers={"Content-Type": "application/json"}, data=data)
+                print("Shutting down transfer tank code")
+                quit(1)
 
-            time.sleep(0.5)
+                time.sleep(0.5)
 finally:
-    IO.cleanup()
+  IO.cleanup()
