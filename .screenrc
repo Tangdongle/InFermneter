@@ -1,0 +1,10 @@
+startup_message off
+
+defscrollback 10000
+
+chdir InFermenter
+screen -t pumpman python3 pumpman.py --config=san_config.ini
+screen -t transfer_tank python3 transfer_tank.py --config=san_config.ini
+screen -t temp_sensor python3 temp_sensor_read.py
+screen -t air_pump python3 air_pump.py --config=san_config.ini
+screen -t ph_probe python3 ph_probe.py --config=san_config.ini
