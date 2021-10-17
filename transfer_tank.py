@@ -62,18 +62,19 @@ DRAINING = True if config["TRANSFER"]["START_DRAINING"] == "True" else False
 
 # Offset to continue draining after the bottom transfer sensor has been activated
 DRAIN_DELAY = int(config["TRANSFER"]["DRAIN_DELAY"])
-GPIO_14 = 14
+PRIMING_GPIO = int(config["TRANSFER"]["PRIMING_GPIO"])
 
 
 IO.setmode(IO.BCM)
 IO.setup(TANK_BOTTOM_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(TANK_TOP_GPIO_IN, IO.IN, pull_up_down=IO.PUD_DOWN)
 IO.setup(PUMP_GPIO_OUT, IO.OUT)
-IO.setup(GPIO_14, IO.OUT)
+IO.setup(PRIMING_GPIO, IO.OUT)
 
 IO.output(PUMP_GPIO_OUT, IO.HIGH)
-IO.output(GPIO_14, IO.HIGH)
+IO.output(PRIMING_GPIO, IO.HIGH)
 
+print("Starting ttank")
 try:
     if ENABLE_CONSTANT_ON:
       IO.output(PUMP_GPIO_OUT, IO.HIGH)
@@ -109,10 +110,10 @@ try:
                 DRAINING = True
                 HAS_PRIMED = True
                 # Set priming tank on
-                IO.output(GPIO_14, IO.LOW)
+                IO.output(PRIMING_GPIO, IO.LOW)
                 time.sleep(1)
                 # Set priming tank back off
-                IO.output(GPIO_14, IO.HIGH)
+                IO.output(PRIMING_GPIO, IO.HIGH)
               # If more than one min and the priming has run
               elif two_plus_mins_in:
                 # If the system has been draining for more than 2 minutes,

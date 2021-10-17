@@ -2,6 +2,10 @@
 Air pump needs to run for one minute a day
 """
 
+import logging
+log_format = '%(levelname)s | %(asctime)-15s | %(message)s'
+logging.basicConfig(format=log_format, level=logging.DEBUG)
+
 import RPi.GPIO as IO
 import configparser
 from datetime import datetime, timedelta, timezone
@@ -51,17 +55,24 @@ def cycle(seconds):
     IO.output(PUMP_GPIO_OUT, IO.HIGH)
 
 
-while True:
-    last_cycle = get_last_timestamp(TS_FILE, days=FREQUENCY)
-    next_run = last_cycle + timedelta(days=FREQUENCY)
+try:
+  print("Starting Air pump!")
+  while True:
+      last_cycle = get_last_timestamp(TS_FILE, days=FREQUENCY)
+      next_run = last_cycle + timedelta(days=FREQUENCY)
 
-    if datetime.now(timezone.utc) >= next_run:
-        update_timestamp_file(TS_FILE)
-        cycle(CYCLE_TIME)
+      if datetime.now(timezone.utc) >= next_run:
+          update_timestamp_file(TS_FILE)
+          cycle(CYCLE_TIME)
 
-    # sleeping for 3 hours after each successive cycle
-    # pump will never be turned on more than each 3 hours
-    # and will mostly be used in increments of 3 hours
-    time.sleep(60 * 60 * 3)
+      print("Starting 3 hour  wait")
+      # sleeping for 3 hours after each successive cycle
+      # pump will never be turned on more than each 3 hours
+      # and will mostly be used in increments of 3 hours
+      time.sleep(60 * 60 * 3)
+except:
+    pass
+finally:
+    IO.cleanup()
 
 # No Cleanup

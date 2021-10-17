@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import time
 from smbus import SMBus
+import requests
+print("Starting PH Probe")
 bus = SMBus(1)
 
 def readChannel(params):
@@ -23,11 +25,23 @@ def readAll():
     data.append(bus.read_byte(0x48))
   return data
 
+url = "https://beer.tanger.dev/ph"
+headers = {'Content-type': 'application/json'}
 while(True):
-  print('all values are:')
-  print(readAll())
   print('channel 1 is:')
   print(readChannel(1))
   print('check AOUT, should be about 2.5v')
   print(analogOut(127))
+  val = readChannel(1)
+  try:
+      response = requests.post(url, json={"ph": val, "data": "Test"}, headers=headers)
+      if response.status_code == 200:
+          print(f"PH request sent with data: {val}")
+      print(
+          f"PH request NOT sent successfully with data: {val} and response code: {response.status_code}: {response.content}"
+      )
+  except requests.ConnectionError:
+      print(
+          f"PH request NOT sent successfully with data: {val} and response code: {response.status_code}: {response.content}"
+      )
   time.sleep(3)

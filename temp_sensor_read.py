@@ -28,7 +28,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # To be put in config path, or enumerate all 28-* devices
-ONEWIRE_PATH = "/sys/bus/w1/devices/28-01192fb03527/w1_slave"
+ONEWIRE_PATH = "/sys/bus/w1/devices/28-0316a279d13f/w1_slave"
 
 def read_temp_raw():
     f = open(ONEWIRE_PATH, "r")

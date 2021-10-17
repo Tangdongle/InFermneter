@@ -41,22 +41,22 @@ IO.setup(PUMP_GPIO_OUT, IO.OUT, initial=IO.HIGH)
 
 NOFILE = False
 try:
-    with open(TS_FILE, "rb") as ts:
-        last_run = datetime.strptime(ts.read()[:TS_STR_REPLACE_TZ_OFFSET], TS_STR_FORMAT)
-        if last_run >= datetime.now(timezone.utc) - timedelta(days=FREQUENCY):
+    with open(TS_FILE, "r") as ts:
+        timestamp = ts.read()[:TS_STR_REPLACE_TZ_OFFSET]
+        if timestamp and datetime.strptime(timestamp, TS_STR_FORMAT) >= datetime.now(timezone.utc) - timedelta(days=FREQUENCY):
             print("Time's not up, keep waiting")
-            IO.output(IO.HIGH)  # make sure the UV is off
+            IO.output(PUMP_GPIO_OUT, IO.HIGH)  # make sure the UV is off
         else:
             # Switch the UV on and let cron do it's job of checking every X minutes
-            IO.output(IO.LOW)
+            IO.output(PUMP_GPIO_OUT, IO.LOW)
 except FileNotFoundError:
     NOFILE = True
 
 # If we have no timestamp, run anyway
 if NOFILE:
-    IO.output(IO.LOW)
+    IO.output(PUMP_GPIO_OUT, IO.LOW)
 # Write the timestamp
-with open(TS_FILE, "wb") as ts:
+with open(TS_FILE, "w") as ts:
     timestamp = datetime.now(timezone.utc).isoformat()
     ts.write(timestamp)
 # No cleanup
