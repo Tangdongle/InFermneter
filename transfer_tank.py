@@ -97,12 +97,13 @@ try:
               time.sleep(DRAIN_DELAY)
 
               DRAINING = False
+              HAS_PRIMED = False
               IO.output(PUMP_GPIO_OUT, IO.HIGH)
             elif DRAINING:
               LAST_DRAINED = get_last_timestamp(DRAIN_FILELOCK, minutes=2)
               two_plus_mins_in = datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=2)
-              one_min_in = datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=1) 
-          
+              one_min_in = datetime.now(timezone.utc) >= LAST_DRAINED + timedelta(minutes=1)
+
               if one_min_in and not two_plus_mins_in and not HAS_PRIMED:
                 # If the system has been draining for more than 1 minute,
                 # we want to turn the priming valve on for 1 second
@@ -120,6 +121,7 @@ try:
                 # we want to forcefully switch it off and send an alert!
                 # System has been draining for more than 2 minures
                 DRAINING = False
+                HAS_PRIMED = False
                 IO.output(PUMP_GPIO_OUT, IO.HIGH)
                 data = {
                     "last_drained": LAST_DRAINED,
