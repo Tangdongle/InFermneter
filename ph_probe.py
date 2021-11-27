@@ -33,8 +33,9 @@ while(True):
   print('check AOUT, should be about 2.5v')
   print(analogOut(127))
   val = readChannel(1)
+  val = (val / 10.0)
   try:
-      response = requests.post(url, json={"ph": val, "data": "Test"}, headers=headers)
+      response = requests.post(url, json={"ph": (val / 10.0), "data": "Test"}, headers=headers)
       if response.status_code == 200:
           print(f"PH request sent with data: {val}")
       print(

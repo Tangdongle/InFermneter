@@ -72,5 +72,6 @@ if __name__ == '__main__':
     IO.output(PUMP_GPIO_OUT, IO.LOW)
     time.sleep(SECONDS_UV_ON)
     IO.output(PUMP_GPIO_OUT, IO.HIGH)
-
     IO.cleanup()
+    with open("/home/pi/uv_log.log", "a+") as fd:
+         fd.write(f"UV triggered at {datetime.now()}")

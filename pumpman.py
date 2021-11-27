@@ -87,10 +87,10 @@ def calc_power(flowrate: float):
     Calculate the required Duty Cycle for a given flowrate
     """
     return (
-        (0.000562 * pow(flowrate, 3))
-        - (0.053428 * pow(flowrate, 2))
-        + (2.039215 * flowrate)
-        - 2.385384
+        (0.001153 * pow(flowrate, 3))
+        - (0.154667 * pow(flowrate, 2))
+        + (7.611175 * flowrate)
+        - 100.318949
     )
 
 
@@ -223,9 +223,9 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled  # Only activate pump if enabled
             ]
-            #+ [cycle_mixer_pump(mixer)]
-            #if mixer.enabled
-            #else []
+            + [cycle_mixer_pump(mixer)]
+            if mixer.enabled
+            else []
         )
     )
 
