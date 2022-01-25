@@ -18,7 +18,7 @@ IO.setup(GPIO_SENSE, IO.OUT)
 
 try:
     while True:
-        val = IO.input(GPIO_SENSE)  # Read from sensor
+        val = not IO.input(GPIO_SENSE)  # Read from sensor
         if val:
             print("Sensing some liquid!")
         else:
