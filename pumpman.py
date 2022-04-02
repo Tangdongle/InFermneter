@@ -191,6 +191,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
 
 async def drain_cycle(level_sensor, drain_pump):
     global HEADERS
+    print("Starting drain cycle")
     # Set direction
     IO.output(drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW)
     # Disable  draining pump
@@ -268,6 +269,7 @@ def start_pumps(pwms):
     )
 
     if level_sensor_enabled:
+        print("Level Sensor Enabled")
         # Set up level sensor GPIO
         IO.setup(level_sensor.gpio, IO.OUT)
         requests.post(
@@ -277,6 +279,7 @@ def start_pumps(pwms):
         )
 
     if drain_pump_enabled:
+        print("Drain Pump Enabled")
         # Set up drain pump GPIOs
         IO.setup(drain_pump.gpio_dir, IO.OUT)
         IO.setup(drain_pump.gpio_pul, IO.OUT)

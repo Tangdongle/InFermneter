@@ -44,6 +44,7 @@ config.read(CONFIGFILE)
 
 # To be put in config path, or enumerate all 28-* devices
 ONEWIRE_PATH = config[CONFIG_SECTION]["PATH"]
+URL = config[CONFIG_SECTION]["URL"]
 
 
 def read_temp_raw():
@@ -68,23 +69,23 @@ def read_temp():
 
 if __name__ == "__main__":
     if not os.path.exists(ONEWIRE_PATH):
-        print("Bad config, recheck where the onewire file is located")
+        print(f"Bad config, recheck where the onewire file is located: {ONEWIRE_PATH}")
         quit(1)
 
     while True:
         temp_c, temp_f = read_temp()
         try:
             response = requests.post(
-                config["URL"],
-                json={"temp": temp_c, "device": CONFIG_SECTION},
+                URL,
+                json={"temp": temp_c, "data": CONFIG_SECTION},
                 headers=headers,
             )
-            print({"temp": temp_c, "data": ""})
             if response.status_code == 200:
                 print(f"Templog request sent with data: {temp_c}")
-            print(
-                f"Templog request NOT sent successfully with data: {temp_c} and response code: {response.status_code}: {response.content}"
-            )
+            else:
+              print(
+                  f"Templog request NOT sent successfully with data: {temp_c} and response code: {response.status_code}: {response.content}"
+              )
         except requests.ConnectionError:
             print(
                 f"Templog request NOT sent successfully with data: {temp_c} and response code: {response.status_code}: {response.content}"
