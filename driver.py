@@ -11,7 +11,7 @@ GPIO_DIR = 2
 GPIO_PUL = 3
 GPIO_EN = 4
 IO.setmode(IO.BCM)
-DELAY = 0.0001
+DELAY = 0.001
 STEPS = 1768
 
 # Don't alert us about stupid shit
@@ -21,6 +21,9 @@ IO.setwarnings(False)
 IO.setup(GPIO_DIR, IO.OUT)
 IO.setup(GPIO_PUL, IO.OUT)
 IO.setup(GPIO_EN, IO.OUT)
+#IO.output(GPIO_DIR, IO.LOW)
+#IO.output(GPIO_PUL, IO.LOW)
+IO.output(GPIO_EN, IO.HIGH)
 
 try:
     IO.output(GPIO_DIR, IO.HIGH)
@@ -33,8 +36,6 @@ try:
         time.sleep(DELAY)
         IO.output(GPIO_PUL, IO.LOW)
         time.sleep(DELAY)
-
-
 finally:
-    IO.output(GPIO_DIR, IO.LOW)
+    IO.output(GPIO_EN, IO.LOW)
     IO.cleanup()

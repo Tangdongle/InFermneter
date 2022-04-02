@@ -7,7 +7,7 @@ except ImportError:
     )
     quit(1)
 
-GPIO_SENSE = 2
+GPIO_SENSE = 10
 IO.setmode(IO.BCM)
 
 # Don't alert us about stupid shit
