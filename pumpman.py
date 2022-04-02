@@ -7,6 +7,7 @@ Manages major pumps and degassing sequence
 import argparse
 import asyncio
 import configparser
+import requests
 from collections import namedtuple
 
 try:
@@ -31,6 +32,8 @@ args = parser.parse_args()
 
 CONFIGFILE = args.config_fname
 
+HEADERS = {"Content-type": "application/json"}
+
 # A couple of definitions
 PumpConfig = namedtuple(
     "PumpConfig", ["gpio", "flowrate", "cycle_time", "enabled", "frequency"]
@@ -42,11 +45,19 @@ MixerPumpConfig = namedtuple(
         "cycle_time",
         "cycle_enabled",
         "enabled",
-        "degas_enabled",
-        "degas_on",
-        "degas_limit",
-        "degas_cycle_time",
     ],
+)
+
+LevelSensorConfig = namedtuple(
+    "LevelSensorConfig",
+    [
+        "gpio",
+    ],
+)
+
+DrainPumpConfig = namedtuple(
+    "DrainPumpConfig",
+    ["gpio_dir", "gpio_pul", "gpio_en", "delay", "dir", "drain_duration"],
 )
 
 # Don't alert us about stupid shit
@@ -104,27 +115,7 @@ async def cycle_mixer_pump(mpump):
     """
 
     on = True  # Is cycle on?
-    icounter = 0  # Degassing iteration counter
 
-    if mpump.degas_enabled:
-        print("Beginning degassing sequence")
-        d_on = mpump.degas_on  # Degas phase on time per cycle
-        while True:
-            # If the degas cycle is on, turn it off and vice versa
-            IO.output(MIXER, IO.HIGH if on else IO.LOW)
-            # Calculate how long between the next cycle
-            to_stop = d_on if on else calc_off_period(d_on, mpump.degas_cycle_time)
-
-            on = not on
-            await asyncio.sleep(to_stop)
-            if icounter >= mpump.degas_limit:
-                # We're done degassing, move on to normal mixing procedures
-                break
-            if not on:
-                icounter += 1
-            await asyncio.sleep(0.5)
-
-        print("Ending degassing sequence")
     on_time = mpump.on  # Normal mixing pump ON time per cycle
 
     if mpump.cycle_enabled:
@@ -140,13 +131,16 @@ async def cycle_mixer_pump(mpump):
         # If cycling is not enabled, switch the pumps on and leave it
         IO.output(MIXER, IO.HIGH)
         while True:
-          await asyncio.sleep(1000)
+            await asyncio.sleep(1000)
+
 
 async def cycle_pump(idx: int, pwm, on: bool):
     """
     Cycle logic for main pumps
     """
     print(f"Cycling pump {idx}")
+
+    global HEADERS
 
     # Which pump are we looking at?
     pconfig = PUMP_IDS[idx + 1]
@@ -177,6 +171,14 @@ async def cycle_pump(idx: int, pwm, on: bool):
 
             # Set the PWM duty cycle to the required power level
             pwm.ChangeDutyCycle(power if on else 0)
+            requests.post(
+                "https://beer.tanger.dev/notification",
+                json={
+                    "message": f"Pump {idx + 1} is {'enabled' if on else 'disabled'}",
+                    "level": "info",
+                },
+                headers=HEADERS,
+            )
             await asyncio.sleep(to_stop)
             on = not on
             await asyncio.sleep(0.5)
@@ -184,7 +186,53 @@ async def cycle_pump(idx: int, pwm, on: bool):
         print("Set for static power cycling")
         pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
         while True:
-             await asyncio.sleep(1000)
+            await asyncio.sleep(1000)
+
+
+async def drain_cycle(level_sensor, drain_pump):
+    global HEADERS
+    # Set direction
+    IO.output(drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW)
+    # Disable  draining pump
+    IO.output(drain_pump.gpio_en, IO.LOW)
+    while True:
+        val = not IO.input(level_sensor.gpio)  # Read from sensor
+        if val:
+            print("Sensing some liquid!")
+            requests.post(
+                "https://beer.tanger.dev/notification",
+                json={"message": f"Level Sensor Triggered", "level": "info"},
+                headers=HEADERS,
+            )
+
+            print(f"Drain  Pump dir is {drain_pump.dir}")
+            requests.post(
+                "https://beer.tanger.dev/notification",
+                json={"message": f"Drain pump is now running", "level": "info"},
+                headers=HEADERS,
+            )
+            IO.output(
+                drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW
+            )
+            print("Starting new cycle")
+            IO.output(drain_pump.gpio_en, IO.HIGH)
+            iters = 0
+            while True:
+                IO.output(drain_pump.gpio_pul, IO.HIGH)
+                await asyncio.sleep(drain_pump.delay)
+                IO.output(drain_pump.gpio_pul, IO.LOW)
+                await asyncio.sleep(drain_pump.delay)
+                iters += 1
+                # Check it's been running for long enough
+                if iters * drain_pump.delay >= drain_pump.drain_duration:
+                    break
+            requests.post(
+                "https://beer.tanger.dev/notification",
+                json={"message": f"Drain pump has finished running", "level": "info"},
+                headers=HEADERS,
+            )
+            IO.output(drain_pump.gpio_en, IO.LOW)
+        await asyncio.sleep(2)
 
 
 def start_pumps(pwms):
@@ -193,6 +241,7 @@ def start_pumps(pwms):
     """
     # Access our config declared in the global scope
     global config
+    global HEADERS
 
     # Default to on
     on = True
@@ -204,12 +253,40 @@ def start_pumps(pwms):
         int(config["MIXER"]["CYCLE_TIME"]),
         bool(int(config["MIXER"]["ENABLE_CYCLING"])),
         bool(int(config["MIXER"]["ENABLED"])),
-        bool(int(config["DEGAS"]["ENABLED"])),
-        int(config["DEGAS"]["DEGAS_ON"]),
-        int(config["DEGAS"]["DEGAS_CYCLE_LIMIT"]),
-        int(config["DEGAS"]["DEGAS_CYCLE_TIME"]),
     )
 
+    level_sensor_enabled = bool(config["LEVEL"]["ENABLED"])
+    drain_pump_enabled = bool(config["DRAIN"]["ENABLED"])
+    level_sensor = LevelSensorConfig(int(config["LEVEL"]["GPIO"]))
+    drain_pump = DrainPumpConfig(
+        int(config["DRAIN"]["GPIO_DIR"]),
+        int(config["DRAIN"]["GPIO_PUL"]),
+        int(config["DRAIN"]["GPIO_EN"]),
+        float(config["DRAIN"]["DELAY"]),
+        config["DRAIN"]["DELAY"],
+        float(config["DRAIN"]["DRAIN_DURATION"]),
+    )
+
+    if level_sensor_enabled:
+        # Set up level sensor GPIO
+        IO.setup(level_sensor.gpio, IO.OUT)
+        requests.post(
+            "https://beer.tanger.dev/notification",
+            json={"message": "Level Sensor setup", "level": "info"},
+            headers=HEADERS,
+        )
+
+    if drain_pump_enabled:
+        # Set up drain pump GPIOs
+        IO.setup(drain_pump.gpio_dir, IO.OUT)
+        IO.setup(drain_pump.gpio_pul, IO.OUT)
+        IO.setup(drain_pump.gpio_en, IO.OUT)
+
+        requests.post(
+            "https://beer.tanger.dev/notification",
+            json={"message": "Drain Pump setup", "level": "info"},
+            headers=HEADERS,
+        )
     # Get the loop that will run our pump tasks asynchronously
     # Think of this as a while True loop with no breaking condition
     loop = asyncio.get_event_loop()
@@ -223,7 +300,9 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled  # Only activate pump if enabled
             ]
-            + [cycle_mixer_pump(mixer)]
+            + [drain_cycle(level_sensor, drain_pump)]
+            if level_sensor_enabled and drain_pump_enabled
+            else [] + [cycle_mixer_pump(mixer)]
             if mixer.enabled
             else []
         )
@@ -255,7 +334,7 @@ try:
     pumps = [
         (idx, setuppump(config), config.enabled)
         for idx, config in enumerate(PUMP_IDS.values())
-	if config.enabled
+        if config.enabled
     ]
     print(pumps)
     try:
