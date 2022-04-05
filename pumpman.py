@@ -216,12 +216,28 @@ async def drain_cycle(level_sensor, drain_pump, pdd):
     def calc_off_cycle(drain_cycle, insta_rate):
       (1-(1/drain_cycle)) * insta_rate * 60
 
-    IO.output(drain_pump.gpio_pul, IO.HIGH)
+    rpm = lambda insta: (0.59277675 * insta) - 0.09822848
+    def step_delay(motor_steps, step_rate, rp):
+      (motor_steps * step_rate) / (360.0 * 60.0 * rp)
+
+    delay = lambda rp: step_delay(drain_pump.motor_steps, drain_pump.step_rate, rp) 
+
     while True:
         val = not IO.input(level_sensor.gpio)  # Read from sensor
         current_insta_rate = insta_rate(transfer_rate(val))
+        d = delay(rpm(current_insta_rate))
         IO.output(drain_pump.gpio_en, IO.LOW)
-        await asyncio.sleep(calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate))
+        on_cycle = calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate)
+        iter = 0
+        while True:
+          IO.output(drain_pump.gpio_pul, IO.HIGH)
+          await asyncio.sleep(d)
+          IO.output(drain_pump.gpio_pul, IO.LOW)
+          await asyncio.sleep(d)
+          iter += 1
+          if (iter * d * 2) >= on_cycle:
+            break
+          
         IO.output(drain_pump.gpio_en, IO.HIGH)
         await asyncio.sleep(calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate))
         requests.post(
