@@ -216,7 +216,7 @@ async def drain_cycle(level_sensor, drain_pump):
                 drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW
             )
             print("Starting new cycle")
-            IO.output(drain_pump.gpio_en, IO.HIGH)
+            IO.output(drain_pump.gpio_en, IO.LOW)
             iters = 0
             while True:
                 IO.output(drain_pump.gpio_pul, IO.HIGH)
@@ -232,7 +232,7 @@ async def drain_cycle(level_sensor, drain_pump):
                 json={"message": f"Drain pump has finished running", "level": "info"},
                 headers=HEADERS,
             )
-            IO.output(drain_pump.gpio_en, IO.LOW)
+            IO.output(drain_pump.gpio_en, IO.HIGH)
         await asyncio.sleep(2)
 
 
@@ -294,7 +294,6 @@ def start_pumps(pwms):
     # Think of this as a while True loop with no breaking condition
     loop = asyncio.get_event_loop()
 
-    print(pwms)
     # As our async tasks never complete, this runs indefinitely
     loop.run_until_complete(
         asyncio.gather(
@@ -303,11 +302,11 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled  # Only activate pump if enabled
             ]
-            + [drain_cycle(level_sensor, drain_pump)]
+            + ([drain_cycle(level_sensor, drain_pump)]
             if level_sensor_enabled and drain_pump_enabled
-            else [] + [cycle_mixer_pump(mixer)]
+            else []) + ([cycle_mixer_pump(mixer)]
             if mixer.enabled
-            else []
+            else [])
         )
     )
 
