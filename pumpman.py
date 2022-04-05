@@ -57,7 +57,18 @@ LevelSensorConfig = namedtuple(
 
 DrainPumpConfig = namedtuple(
     "DrainPumpConfig",
-    ["gpio_dir", "gpio_pul", "gpio_en", "drain_sen", "drain_boost", "drain_cycle_time", "motor_steps", "step_set", "dir", "enabled"],
+    [
+        "gpio_dir",
+        "gpio_pul",
+        "gpio_en",
+        "drain_sen",
+        "drain_boost",
+        "drain_cycle_time",
+        "motor_steps",
+        "step_set",
+        "dir",
+        "enabled",
+    ],
 )
 
 # Don't alert us about stupid shit
@@ -86,14 +97,17 @@ PUMP_IDS = {
 # Get our mixer GPIO pin number from config
 MIXER = int(config["MIXER"]["MIXER_GPIO"])
 
+
 def feed_rate(ppd):
     return 0.395 * ppd
 
+
 def calc_drain_pump_transfer_rate(feed_rate, drain_sensitivity, level_sensor_active):
     if level_sensor_active:
-      return feed_rate * (1 + drain_sensitivity)
+        return feed_rate * (1 + drain_sensitivity)
     else:
-      return feed_rate * (1 - drain_sensitivity)
+        return feed_rate * (1 - drain_sensitivity)
+
 
 def calc_insantaneous_rate(transfer_rate, drain_boost):
     return transfer_rate * drain_boost
@@ -202,44 +216,50 @@ async def cycle_pump(idx: int, pwm, on: bool):
             await asyncio.sleep(1000)
 
 
-async def drain_cycle(level_sensor, drain_pump, pdd):
+async def drain_cycle(level_sensor, drain_pump, ppd):
     global HEADERS
     print("Starting drain cycle")
     # Set direction
     IO.output(drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW)
-    transfer_rate = lambda level_sensor_active: calc_drain_pump_transfer_rate(feed_rate(ppd), drain_pump.drain_sen, level_sensor_active)
-    insta_rate = lambda trans_rate: calc_insantaneous_rate(trans_rate, drain_pump.drain_boost)
 
     def calc_on_cycle(drain_cycle, insta_rate):
-      (1/drain_cycle) * insta_rate * 60
+        return (1 / drain_cycle) * insta_rate * 60
 
     def calc_off_cycle(drain_cycle, insta_rate):
-      (1-(1/drain_cycle)) * insta_rate * 60
+        return (1 - (1 / drain_cycle)) * insta_rate * 60
 
-    rpm = lambda insta: (0.59277675 * insta) - 0.09822848
     def step_delay(motor_steps, step_rate, rp):
-      (motor_steps * step_rate) / (360.0 * 60.0 * rp)
+        return (motor_steps * step_rate) / (360.0 * 60.0 * rp)
 
-    delay = lambda rp: step_delay(drain_pump.motor_steps, drain_pump.step_rate, rp) 
+    def rpm(insta):
+        return (0.59277675 * insta) - 0.09822848
 
     while True:
         val = not IO.input(level_sensor.gpio)  # Read from sensor
+
+        transfer_rate = calc_drain_pump_transfer_rate(
+            feed_rate(ppd), drain_pump.drain_sen, val
+        )
+        insta_rate = calc_insantaneous_rate(transfer_rate, drain_pump.drain_boost)
         current_insta_rate = insta_rate(transfer_rate(val))
-        d = delay(rpm(current_insta_rate))
+        rpm = rpm(current_insta_rate)
+        d = step_delay(drain_pump.motor_steps, drain_pump.step_rate, rpm)
         IO.output(drain_pump.gpio_en, IO.LOW)
         on_cycle = calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate)
         iter = 0
         while True:
-          IO.output(drain_pump.gpio_pul, IO.HIGH)
-          await asyncio.sleep(d)
-          IO.output(drain_pump.gpio_pul, IO.LOW)
-          await asyncio.sleep(d)
-          iter += 1
-          if (iter * d * 2) >= on_cycle:
-            break
-          
+            IO.output(drain_pump.gpio_pul, IO.HIGH)
+            await asyncio.sleep(d)
+            IO.output(drain_pump.gpio_pul, IO.LOW)
+            await asyncio.sleep(d)
+            iter += 1
+            if (iter * d * 2) >= on_cycle:
+                break
+
         IO.output(drain_pump.gpio_en, IO.HIGH)
-        await asyncio.sleep(calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate))
+        await asyncio.sleep(
+            calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)
+        )
         requests.post(
             "https://beer.tanger.dev/notification",
             json={"message": f"Drain pump has finished running", "level": "info"},
@@ -280,7 +300,6 @@ def start_pumps(pwms):
         config["DRAIN"]["DIR"],
         bool(int(config["DRAIN"]["ENABLED"])),
     )
-    
 
     if level_sensor_enabled:
         print("Level Sensor Enabled")
@@ -292,7 +311,7 @@ def start_pumps(pwms):
             headers=HEADERS,
         )
 
-    if drain_pump_enabled:
+    if drain_pump.enabled:
         print("Drain Pump Enabled")
         # Set up drain pump GPIOs
         IO.setup(drain_pump.gpio_dir, IO.OUT)
@@ -316,11 +335,12 @@ def start_pumps(pwms):
                 for (idx, pwm, enabled) in pwms
                 if enabled  # Only activate pump if enabled
             ]
-            + ([drain_cycle(level_sensor, drain_pump, PPD)]
-            if level_sensor_enabled and drain_pump.enabled
-            else []) + ([cycle_mixer_pump(mixer)]
-            if mixer.enabled
-            else [])
+            + (
+                [drain_cycle(level_sensor, drain_pump, PPD)]
+                if level_sensor_enabled and drain_pump.enabled
+                else []
+            )
+            + ([cycle_mixer_pump(mixer)] if mixer.enabled else [])
         )
     )
 
