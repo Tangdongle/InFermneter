@@ -9,11 +9,27 @@ import asyncio
 import configparser
 import requests
 from collections import namedtuple
+import logging
+formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG) # process everything, even if everything isn't printe
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO) # or any other level
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+fh = logging.FileHandler('pmplog.log')
+fh.setLevel(logging.DEBUG) # or any level you want
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
 
 try:
     import RPi.GPIO as IO
 except ImportError:
-    print(
+    logger.info(
         "No GPIO lib detected. Is this running on the PI and has this library been installed?"
     )
     quit(1)
@@ -110,7 +126,7 @@ def calc_drain_pump_transfer_rate(feed_rate, drain_sensitivity, level_sensor_act
 
 
 def calc_insantaneous_rate(transfer_rate, drain_boost):
-    return transfer_rate * drain_boost
+    return transfer_rate / drain_boost
 
 
 def calc_off_period(on, cycle_time):
@@ -120,7 +136,7 @@ def calc_off_period(on, cycle_time):
     return cycle_time - on
 
 
-def calc_power(flowrate: float):
+def calc_power(flowrate):
     """
     Calculate the required Duty Cycle for a given flowrate
     """
@@ -146,7 +162,7 @@ async def cycle_mixer_pump(mpump):
     on_time = mpump.on  # Normal mixing pump ON time per cycle
 
     if mpump.cycle_enabled:
-        print("[MIXER] Cycling Enabled")
+        logger.info("[MIXER] Cycling Enabled")
         # Alternate between turning the mixing pumps on and off
         while True:
             IO.output(MIXER, IO.HIGH if on else IO.LOW)
@@ -154,7 +170,7 @@ async def cycle_mixer_pump(mpump):
             on = not on
             await asyncio.sleep(to_stop)
     else:
-        print("[MIXER] Constant operation")
+        logger.info("[MIXER] Constant operation")
         # If cycling is not enabled, switch the pumps on and leave it
         IO.output(MIXER, IO.HIGH)
         while True:
@@ -165,7 +181,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
     """
     Cycle logic for main pumps
     """
-    print(f"Cycling pump {idx}")
+    logger.info(f"Cycling pump {idx + 1}")
 
     global HEADERS
 
@@ -178,7 +194,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
     # Fetch the cycle time for this pump
     cycle_time = pconfig.cycle_time
     if flowrate <= FLOW_LOW:
-        print(f"Pump {idx}: Set for dynamic power cycling")
+        logger.info(f"Pump {idx + 1}: Set for dynamic power cycling")
         while True:
 
             def on_cycle():
@@ -198,19 +214,19 @@ async def cycle_pump(idx: int, pwm, on: bool):
 
             # Set the PWM duty cycle to the required power level
             pwm.ChangeDutyCycle(power if on else 0)
-            requests.post(
-                "https://beer.tanger.dev/notification",
-                json={
-                    "message": f"Pump {idx + 1} is {'enabled' if on else 'disabled'}",
-                    "level": "info",
-                },
-                headers=HEADERS,
-            )
+            #requests.post(
+            #    "https://beer.tanger.dev/notification",
+            #    json={
+            #        "message": f"Pump {idx + 1} is {'enabled' if on else 'disabled'}",
+            #        "level": "info",
+            #    },
+            #    headers=HEADERS,
+            #)
             await asyncio.sleep(to_stop)
             on = not on
             await asyncio.sleep(0.5)
     else:
-        print("Set for static power cycling")
+        logger.info("Set for static power cycling")
         pwm.ChangeDutyCycle(calc_power(flowrate) if on else 0)
         while True:
             await asyncio.sleep(1000)
@@ -218,7 +234,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
 
 async def drain_cycle(level_sensor, drain_pump, ppd):
     global HEADERS
-    print("Starting drain cycle")
+    logger.info("Starting drain cycle")
     # Set direction
     IO.output(drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW)
 
@@ -238,25 +254,32 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         val = not IO.input(level_sensor.gpio)  # Read from sensor
 
         transfer_rate = calc_drain_pump_transfer_rate(
-            feed_rate(ppd), drain_pump.drain_sen, val
+           feed_rate(ppd), drain_pump.drain_sen, val
         )
-        insta_rate = calc_insantaneous_rate(transfer_rate, drain_pump.drain_boost)
-        current_insta_rate = insta_rate(transfer_rate(val))
-        rpm = rpm(current_insta_rate)
-        d = step_delay(drain_pump.motor_steps, drain_pump.step_rate, rpm)
+        current_insta_rate = calc_insantaneous_rate(transfer_rate, drain_pump.drain_boost)
+        rpm_val = rpm(current_insta_rate)
+        d = step_delay(drain_pump.motor_steps, drain_pump.step_set, rpm_val)
         IO.output(drain_pump.gpio_en, IO.LOW)
         on_cycle = calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate)
+        logger.info(f"On for {on_cycle} seconds")
+        logger.info(f"DELAY FOR {d} SECONDS")
         iter = 0
+        total = 0.0
         while True:
             IO.output(drain_pump.gpio_pul, IO.HIGH)
             await asyncio.sleep(d)
             IO.output(drain_pump.gpio_pul, IO.LOW)
-            await asyncio.sleep(d)
+            #await asyncio.sleep(d)
             iter += 1
-            if (iter * d * 2) >= on_cycle:
+            total += d
+            if iter % 1000 == 0:
+              logger.info(f"Iteration calc: {iter} = {total} | {total * d} vs {on_cycle}")
+            if total * d >= on_cycle:
                 break
 
+        logger.info(f"Turning off")
         IO.output(drain_pump.gpio_en, IO.HIGH)
+        logger.info(f"sleeping for {calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)}")
         await asyncio.sleep(
             calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)
         )
@@ -278,7 +301,7 @@ def start_pumps(pwms):
     # Default to on
     on = True
 
-    print("Starting pump loop")
+    logger.info("Starting pump loop")
     # Set up our mixer
     mixer = MixerPumpConfig(
         int(config["MIXER"]["ON"]),
@@ -294,6 +317,7 @@ def start_pumps(pwms):
         int(config["DRAIN"]["GPIO_PUL"]),
         int(config["DRAIN"]["GPIO_EN"]),
         float(config["DRAIN"]["DRAIN_SEN"]),
+        float(config["DRAIN"]["DRAIN_BOOST"]),
         float(config["DRAIN"]["DRAIN_CYCLE_TIME"]),
         int(config["DRAIN"]["MOTOR_STEPS"]),
         float(config["DRAIN"]["STEP_SET"]),
@@ -302,7 +326,7 @@ def start_pumps(pwms):
     )
 
     if level_sensor_enabled:
-        print("Level Sensor Enabled")
+        logger.info("Level Sensor Enabled")
         # Set up level sensor GPIO
         IO.setup(level_sensor.gpio, IO.OUT)
         requests.post(
@@ -312,7 +336,7 @@ def start_pumps(pwms):
         )
 
     if drain_pump.enabled:
-        print("Drain Pump Enabled")
+        logger.info("Drain Pump Enabled")
         # Set up drain pump GPIOs
         IO.setup(drain_pump.gpio_dir, IO.OUT)
         IO.setup(drain_pump.gpio_pul, IO.OUT)
@@ -353,7 +377,7 @@ try:
     IO.setmode(IO.BCM)
     IO.setup(MIXER, IO.OUT)
 
-    def setuppump(config: PumpConfig):
+    def setuppump(idx, config: PumpConfig):
         """
         Set our pump GPIO and initialise the PWM connection
         """
@@ -363,25 +387,25 @@ try:
             IO.setup(int(pin), IO.OUT)
             p = IO.PWM(int(pin), config.frequency)
             p.start(0)
-            print(f"Setting up pump {pin} with PWM frequency {config.frequency}")
+            logger.info(f"SETUP FOR PUMP {idx + 1}: Setting up pump {pin} with PWM frequency {config.frequency}")
             return p
 
     # Set up our pumps, ignoring any disabled ones
     pumps = [
-        (idx, setuppump(config), config.enabled)
+        (idx, setuppump(idx, config), config.enabled)
         for idx, config in enumerate(PUMP_IDS.values())
         if config.enabled
     ]
-    print(pumps)
+    logger.info(pumps)
     try:
         start_pumps(pumps)
     except Exception as e:
-        print(f"Quitting/Error: Cleaning up: {e}")
+        logger.info(f"Quitting/Error: Cleaning up: {e}")
 except Exception as e:
-    print(e)
+    logger.info(e)
     pass
 finally:
-    print("Cleaning up")
+    logger.info("Cleaning up")
     try:
         # cleanup our pins
         for pump in pumps:
@@ -391,3 +415,4 @@ finally:
         pass
     finally:
         IO.cleanup()
+        raise(IOError)
