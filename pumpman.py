@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import configparser
 import requests
+import datetime
 from collections import namedtuple
 import logging
 formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
@@ -97,6 +98,10 @@ config.read(CONFIGFILE)
 # Lowest flowrate before cycling begins
 FLOW_LOW = float(config["GENERAL"]["FLOW_LOW"])
 PPD = float(config["AUTO"]["PPD"])
+REAC_RECYC = float(config["AUTO"]["REACTOR_RECYLE"])
+CLAR_RECYC = float(config["AUTO"]["CLARIFIER_RECYLE"])
+SLOPS_RATE = float(config["AUTO"]["SLOPS_RATE"])
+TEMP_STOP = float(config["DRAIN"]["TEMP_STOP"])
 
 # Read our pump config data
 PUMP_IDS = {
@@ -112,6 +117,7 @@ PUMP_IDS = {
 
 # Get our mixer GPIO pin number from config
 MIXER = int(config["MIXER"]["MIXER_GPIO"])
+SAFETY_RELAY = 18
 
 
 def feed_rate(ppd):
@@ -126,7 +132,7 @@ def calc_drain_pump_transfer_rate(feed_rate, drain_sensitivity, level_sensor_act
 
 
 def calc_insantaneous_rate(transfer_rate, drain_boost):
-    return transfer_rate / drain_boost
+    return transfer_rate * drain_boost
 
 
 def calc_off_period(on, cycle_time):
@@ -188,8 +194,16 @@ async def cycle_pump(idx: int, pwm, on: bool):
     # Which pump are we looking at?
     pconfig = PUMP_IDS[idx + 1]
 
-    # Fetch the flowrate for this pump
-    flowrate = pconfig.flowrate
+    if idx + 1 == 2:
+        flowrate = feed_rate(PPD) * REAC_RECYC
+
+    elif idx + 1 == 3:
+        flowrate = feed_rate(PPD) * CLAR_RECYC
+    elif idx + 1 == 4:
+        flowrate = feed_rate(PPD) * SLOPS_RATE
+    else:
+        # Fetch the flowrate for this pump
+        flowrate = pconfig.flowrate
 
     # Fetch the cycle time for this pump
     cycle_time = pconfig.cycle_time
@@ -239,10 +253,10 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
     IO.output(drain_pump.gpio_dir, IO.HIGH if drain_pump.dir == "CCW" else IO.LOW)
 
     def calc_on_cycle(drain_cycle, insta_rate):
-        return (1 / drain_cycle) * insta_rate * 60
+        return (drain_cycle / drain_pump.drain_boost) * 60
 
     def calc_off_cycle(drain_cycle, insta_rate):
-        return (1 - (1 / drain_cycle)) * insta_rate * 60
+        return (drain_cycle) - (drain_cycle / drain_pump.drain_boost) * 60
 
     def step_delay(motor_steps, step_rate, rp):
         return (motor_steps * step_rate) / (360.0 * 60.0 * rp)
@@ -250,35 +264,68 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
     def rpm(insta):
         return (0.59277675 * insta) - 0.09822848
 
+    ONEWIRE_PATH = config["DRAIN_TEMP"]["PATH"]
+
+    def read_temp_raw():
+        f = open(ONEWIRE_PATH, "r")
+        lines = f.readlines()
+        f.close()
+        return lines
+
+    def read_temp():
+        lines = read_temp_raw()
+        while lines[0].strip()[-3:] != "YES":
+            await asyncio.sleep(0.2)
+            lines = read_temp_raw()
+
+        equal_pos = lines[1].find("t=")
+        if equal_pos != -1:
+            temp_string = lines[1][equal_pos + 2:]
+            temp_in_c = float(temp_string) / 1000.0
+            temp_in_f = temp_in_c * 9.0 / 5.0 + 32.0
+            return temp_in_c, temp_in_f
+
     while True:
+        temp_c, temp_f = read_temp()
+
+        current_time = datetime.datetime.now()
+        if current_time.hour > 20:
+            # Don't run at night
+            await asyncio.sleep(60 * 60)
+        elif current_time.hour < 6:
+            # Don't run at night
+            await asyncio.sleep(60 * 60)
+
+        if temp_c > TEMP_STOP:
+            # Sleep a minute before checking again
+            IO.output(SAFETY_RELAY, IO.HIGH)
+            await asyncio.sleep(60)
+        else:
+            IO.output(SAFETY_RELAY, IO.LOW)
+
         val = not IO.input(level_sensor.gpio)  # Read from sensor
 
         transfer_rate = calc_drain_pump_transfer_rate(
-           feed_rate(ppd), drain_pump.drain_sen, val
+            feed_rate(ppd), drain_pump.drain_sen, val
         )
         current_insta_rate = calc_insantaneous_rate(transfer_rate, drain_pump.drain_boost)
         rpm_val = rpm(current_insta_rate)
         d = step_delay(drain_pump.motor_steps, drain_pump.step_set, rpm_val)
-        IO.output(drain_pump.gpio_en, IO.LOW)
+        IO.output(drain_pump.gpio_en, IO.HIGH)
         on_cycle = calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate)
         logger.info(f"On for {on_cycle} seconds")
         logger.info(f"DELAY FOR {d} SECONDS")
-        iter = 0
         total = 0.0
         while True:
             IO.output(drain_pump.gpio_pul, IO.HIGH)
             await asyncio.sleep(d)
             IO.output(drain_pump.gpio_pul, IO.LOW)
-            #await asyncio.sleep(d)
-            iter += 1
             total += d
-            if iter % 1000 == 0:
-              logger.info(f"Iteration calc: {iter} = {total} | {total * d} vs {on_cycle}")
             if total * d >= on_cycle:
                 break
 
         logger.info(f"Turning off")
-        IO.output(drain_pump.gpio_en, IO.HIGH)
+        IO.output(drain_pump.gpio_en, IO.LOW)
         logger.info(f"sleeping for {calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)}")
         await asyncio.sleep(
             calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)
