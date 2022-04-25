@@ -98,8 +98,8 @@ config.read(CONFIGFILE)
 # Lowest flowrate before cycling begins
 FLOW_LOW = float(config["GENERAL"]["FLOW_LOW"])
 PPD = float(config["AUTO"]["PPD"])
-REAC_RECYC = float(config["AUTO"]["REACTOR_RECYLE"])
-CLAR_RECYC = float(config["AUTO"]["CLARIFIER_RECYLE"])
+REAC_RECYC = float(config["AUTO"]["REACTOR_RECYCLE"])
+CLAR_RECYC = float(config["AUTO"]["CLARIFIER_RECYCLE"])
 SLOPS_RATE = float(config["AUTO"]["SLOPS_RATE"])
 TEMP_STOP = float(config["DRAIN"]["TEMP_STOP"])
 
@@ -203,8 +203,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
         flowrate = feed_rate(PPD) * SLOPS_RATE
     else:
         # Fetch the flowrate for this pump
-        flowrate = pconfig.flowrate
-
+        flowrate = feed_rate(PPD)
     # Fetch the cycle time for this pump
     cycle_time = pconfig.cycle_time
     if flowrate <= FLOW_LOW:
@@ -256,7 +255,7 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         return (drain_cycle / drain_pump.drain_boost) * 60
 
     def calc_off_cycle(drain_cycle, insta_rate):
-        return (drain_cycle) - (drain_cycle / drain_pump.drain_boost) * 60
+        return ((drain_cycle) - (drain_cycle / drain_pump.drain_boost)) * 60
 
     def step_delay(motor_steps, step_rate, rp):
         return (motor_steps * step_rate) / (360.0 * 60.0 * rp)
@@ -275,7 +274,7 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
     def read_temp():
         lines = read_temp_raw()
         while lines[0].strip()[-3:] != "YES":
-            await asyncio.sleep(0.2)
+            time.sleep(0.2)
             lines = read_temp_raw()
 
         equal_pos = lines[1].find("t=")
@@ -285,25 +284,30 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
             temp_in_f = temp_in_c * 9.0 / 5.0 + 32.0
             return temp_in_c, temp_in_f
 
+    logger.info("Starting drain loop")
     while True:
         temp_c, temp_f = read_temp()
 
         current_time = datetime.datetime.now()
         if current_time.hour > 20:
+            logger.info("Time over 20")
             # Don't run at night
             await asyncio.sleep(60 * 60)
         elif current_time.hour < 6:
+            logger.info("Time under 6")
             # Don't run at night
             await asyncio.sleep(60 * 60)
 
         if temp_c > TEMP_STOP:
+            logger.info("Temp above")
             # Sleep a minute before checking again
             IO.output(SAFETY_RELAY, IO.HIGH)
-            await asyncio.sleep(60)
+            await asyncio.sleep(60 * 20)
         else:
             IO.output(SAFETY_RELAY, IO.LOW)
 
         val = not IO.input(level_sensor.gpio)  # Read from sensor
+        logger.info(f"Level sensor is {val}")
 
         transfer_rate = calc_drain_pump_transfer_rate(
             feed_rate(ppd), drain_pump.drain_sen, val
@@ -311,30 +315,33 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         current_insta_rate = calc_insantaneous_rate(transfer_rate, drain_pump.drain_boost)
         rpm_val = rpm(current_insta_rate)
         d = step_delay(drain_pump.motor_steps, drain_pump.step_set, rpm_val)
-        IO.output(drain_pump.gpio_en, IO.HIGH)
+        IO.output(drain_pump.gpio_en, IO.LOW)
         on_cycle = calc_on_cycle(drain_pump.drain_cycle_time, current_insta_rate)
         logger.info(f"On for {on_cycle} seconds")
         logger.info(f"DELAY FOR {d} SECONDS")
-        total = 0.0
+        logger.info(f"RPM FOR {rpm_val} SECONDS")
+        logger.info(f"SLEEPIN FOR {on_cycle / d} SECONDS")
         while True:
             IO.output(drain_pump.gpio_pul, IO.HIGH)
             await asyncio.sleep(d)
             IO.output(drain_pump.gpio_pul, IO.LOW)
-            total += d
-            if total * d >= on_cycle:
+            await asyncio.sleep(d)
+            loop_time = datetime.datetime.now()
+            if loop_time >= current_time + datetime.timedelta(seconds=on_cycle):
+                logger.info(f"CYCLED FOR {on_cycle} SECONDS")
                 break
 
         logger.info(f"Turning off")
-        IO.output(drain_pump.gpio_en, IO.LOW)
+        IO.output(drain_pump.gpio_en, IO.HIGH)
         logger.info(f"sleeping for {calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)}")
         await asyncio.sleep(
             calc_off_cycle(drain_pump.drain_cycle_time, current_insta_rate)
         )
-        requests.post(
-            "https://beer.tanger.dev/notification",
-            json={"message": f"Drain pump has finished running", "level": "info"},
-            headers=HEADERS,
-        )
+        #requests.post(
+        #    "https://beer.tanger.dev/notification",
+        #    json={"message": f"Drain pump has finished running", "level": "info"},
+        #    headers=HEADERS,
+        #)
 
 
 def start_pumps(pwms):
@@ -376,11 +383,11 @@ def start_pumps(pwms):
         logger.info("Level Sensor Enabled")
         # Set up level sensor GPIO
         IO.setup(level_sensor.gpio, IO.OUT)
-        requests.post(
-            "https://beer.tanger.dev/notification",
-            json={"message": "Level Sensor setup", "level": "info"},
-            headers=HEADERS,
-        )
+        #requests.post(
+        #    "https://beer.tanger.dev/notification",
+        #    json={"message": "Level Sensor setup", "level": "info"},
+        #    headers=HEADERS,
+        #)
 
     if drain_pump.enabled:
         logger.info("Drain Pump Enabled")
@@ -388,12 +395,13 @@ def start_pumps(pwms):
         IO.setup(drain_pump.gpio_dir, IO.OUT)
         IO.setup(drain_pump.gpio_pul, IO.OUT)
         IO.setup(drain_pump.gpio_en, IO.OUT)
+        IO.setup(SAFETY_RELAY, IO.OUT)
 
-        requests.post(
-            "https://beer.tanger.dev/notification",
-            json={"message": "Drain Pump setup", "level": "info"},
-            headers=HEADERS,
-        )
+        #requests.post(
+        #    "https://beer.tanger.dev/notification",
+        #    json={"message": "Drain Pump setup", "level": "info"},
+        #    headers=HEADERS,
+        #)
     # Get the loop that will run our pump tasks asynchronously
     # Think of this as a while True loop with no breaking condition
     loop = asyncio.get_event_loop()
