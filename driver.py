@@ -18,15 +18,16 @@ STEPS = 1768
 IO.setwarnings(False)
 
 # Set our GPIO modes
+IO.setup(18, IO.OUT)
 IO.setup(GPIO_DIR, IO.OUT)
 IO.setup(GPIO_PUL, IO.OUT)
 IO.setup(GPIO_EN, IO.OUT)
 #IO.output(GPIO_DIR, IO.LOW)
 #IO.output(GPIO_PUL, IO.LOW)
-IO.output(GPIO_EN, IO.HIGH)
+#IO.output(GPIO_EN, IO.LOW)
 
 try:
-    IO.output(GPIO_DIR, IO.HIGH)
+    IO.output(GPIO_DIR, IO.LOW)
     # For 48-step motor, 48 iterations is one full cycle 
     # when the stepper is on 1
     #for i in range(0, STEPS):
