@@ -189,6 +189,7 @@ async def cycle_pump(idx: int, pwm, on: bool):
     Cycle logic for main pumps
     """
     logger.info(f"Cycling pump {idx + 1}")
+    await asyncio.sleep((idx + 1) * 6)
 
     global HEADERS
 
@@ -290,16 +291,18 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         temp_c, temp_f = read_temp()
 
         current_time = datetime.datetime.now()
-        if current_time.hour > 20:
+        if current_time.hour > 22:
             logger.info("Time over 20")
             IO.output(SAFETY_RELAY, IO.HIGH)
             # Don't run at night
             await asyncio.sleep(60 * 60)
-        elif current_time.hour < 6:
+            continue
+        elif current_time.hour < 8:
             IO.output(SAFETY_RELAY, IO.HIGH)
             logger.info("Time under 6")
             # Don't run at night
             await asyncio.sleep(60 * 60)
+            continue
         else:
             IO.output(SAFETY_RELAY, IO.LOW)
 
