@@ -9,6 +9,7 @@ import asyncio
 import configparser
 import requests
 import datetime
+import time
 from collections import namedtuple
 import logging
 formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
@@ -261,7 +262,7 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         return (motor_steps * step_rate) / (360.0 * 60.0 * rp)
 
     def rpm(insta):
-        return (0.59277675 * insta) - 0.09822848
+        return (0.711333210 * insta) - 0.11787417
 
     ONEWIRE_PATH = config["DRAIN_TEMP"]["PATH"]
 
@@ -291,12 +292,17 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         current_time = datetime.datetime.now()
         if current_time.hour > 20:
             logger.info("Time over 20")
+            IO.output(SAFETY_RELAY, IO.HIGH)
             # Don't run at night
             await asyncio.sleep(60 * 60)
         elif current_time.hour < 6:
+            IO.output(SAFETY_RELAY, IO.HIGH)
             logger.info("Time under 6")
             # Don't run at night
             await asyncio.sleep(60 * 60)
+        else:
+            IO.output(SAFETY_RELAY, IO.LOW)
+
 
         if temp_c > TEMP_STOP:
             logger.info("Temp above")
