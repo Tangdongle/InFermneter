@@ -290,22 +290,6 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
     while True:
         temp_c, temp_f = read_temp()
 
-        current_time = datetime.datetime.now()
-        if current_time.hour > 22:
-            logger.info("Time over 20")
-            IO.output(SAFETY_RELAY, IO.HIGH)
-            # Don't run at night
-            await asyncio.sleep(60 * 60)
-            continue
-        elif current_time.hour < 8:
-            IO.output(SAFETY_RELAY, IO.HIGH)
-            logger.info("Time under 6")
-            # Don't run at night
-            await asyncio.sleep(60 * 60)
-            continue
-        else:
-            IO.output(SAFETY_RELAY, IO.LOW)
-
 
         if temp_c > TEMP_STOP:
             logger.info("Temp above")
@@ -330,6 +314,7 @@ async def drain_cycle(level_sensor, drain_pump, ppd):
         logger.info(f"DELAY FOR {d} SECONDS")
         logger.info(f"RPM FOR {rpm_val} SECONDS")
         logger.info(f"SLEEPIN FOR {on_cycle / d} SECONDS")
+        current_time = datetime.datetime.now()
         while True:
             IO.output(drain_pump.gpio_pul, IO.HIGH)
             await asyncio.sleep(d)

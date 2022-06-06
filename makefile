@@ -13,3 +13,6 @@ run_transfer_tank:
 run:
 	python3 pumpman.py
 	python3 transfer_tank.py
+
+drain:
+  python3 drain.py
